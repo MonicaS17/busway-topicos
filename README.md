@@ -1,5 +1,4 @@
 # 🚌 BusWay — Transporte Escolar Digital
-
 > *tus hijos seguros en cada ruta*
 
 Plataforma digital de transporte escolar para Panamá. Permite a los padres monitorear en tiempo real la ruta del bus, verificar la asistencia de sus hijos mediante códigos QR y gestionar pagos automáticos.
@@ -63,7 +62,6 @@ Estos archivos **no están en GitHub** por seguridad. Pídelos por WhatsApp:
 
 - `be/serviceAccount.json` → credenciales de Firebase Admin
 - La clave de Google Vision API → va en `mobile/.env`
-
 ---
 
 ## Cómo ejecutar el proyecto
