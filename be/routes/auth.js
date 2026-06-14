@@ -210,5 +210,19 @@ router.get('/usuarios', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
-
+// PATCH cambiar estado de usuario
+router.patch('/usuarios/:id/estado', verifyToken, async (req, res) => {
+  try {
+    const { estado } = req.body;
+    const usuario = await Usuario.findByIdAndUpdate(
+      req.params.id,
+      { estado },
+      { new: true }
+    );
+    if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' });
+    res.json({ mensaje: 'Estado actualizado', usuario });
+  } catch (error) {
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
 module.exports = router;

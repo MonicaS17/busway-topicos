@@ -1,36 +1,56 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FiHome, FiPlus, FiSearch, FiTrash2 } from 'react-icons/fi';
-
-const initialEscuelas = [
-  { id: 1, nombre: 'Colegio San Agustin', distrito: 'La Chorrera', rutas: 4, conductores: 82, estado: 'Activa' },
-  { id: 2, nombre: 'Colegio La Salle', distrito: 'Panama', rutas: 12, conductores: 60, estado: 'Activa' },
-  { id: 3, nombre: 'Instituto Istmeno', distrito: 'Arraijan', rutas: 7, conductores: 38, estado: 'Activa' },
-];
+import { api } from '@/lib/api';
 
 export default function EscuelasPage() {
-  const [escuelas, setEscuelas] = useState(initialEscuelas);
+  const [escuelas, setEscuelas] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ nombre: '', distrito: '' });
+
+  useEffect(() => {
+    api.getEscuelas()
+      .then((data) => setEscuelas(data.escuelas))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
 
   const filtered = escuelas.filter((e) =>
     e.nombre.toLowerCase().includes(search.toLowerCase()) ||
     e.distrito.toLowerCase().includes(search.toLowerCase())
   );
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!form.nombre || !form.distrito) return;
-    setEscuelas([...escuelas, { id: Date.now(), ...form, rutas: 0, conductores: 0, estado: 'Activa' }]);
-    setForm({ nombre: '', distrito: '' });
-    setShowModal(false);
-  };
-
-  const handleDelete = (id) => {
-    if (confirm('Eliminar esta escuela?')) {
-      setEscuelas(escuelas.filter((e) => e.id !== id));
+    try {
+      const data = await api.crearEscuela(form);
+      setEscuelas([data.escuela, ...escuelas]);
+      setForm({ nombre: '', distrito: '' });
+      setShowModal(false);
+    } catch (err) {
+      alert('Error al crear escuela: ' + err.message);
     }
   };
+
+  const handleDelete = async (id) => {
+    if (!confirm('¿Eliminar esta escuela?')) return;
+    try {
+      await api.eliminarEscuela(id);
+      setEscuelas(escuelas.filter((e) => e._id !== id));
+    } catch (err) {
+      alert('Error al eliminar: ' + err.message);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <p className="text-sm text-slate-500">Cargando escuelas...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 lg:p-8">
@@ -44,62 +64,58 @@ export default function EscuelasPage() {
         </div>
       </div>
 
-      <div>
-        <button
-          type="button"
-          onClick={() => setShowModal(true)}
-          className="mb-5 flex h-14 w-full items-center justify-center gap-2 rounded-md bg-busway-yellow text-sm font-extrabold text-navy shadow-sm hover:bg-yellow-400 transition"
-        >
-          <FiPlus size={18} />
-          Agregar escuela
-        </button>
+      <button
+        type="button"
+        onClick={() => setShowModal(true)}
+        className="mb-5 flex h-14 w-full items-center justify-center gap-2 rounded-md bg-busway-yellow text-sm font-extrabold text-navy shadow-sm hover:bg-yellow-400 transition"
+      >
+        <FiPlus size={18} />
+        Agregar escuela
+      </button>
 
-        <div className="relative mb-5">
-          <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input
-            type="text"
-            placeholder="Buscar por nombre o distrito"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm outline-none focus:border-busway-blue"
-          />
-        </div>
+      <div className="relative mb-5">
+        <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+        <input
+          type="text"
+          placeholder="Buscar por nombre o distrito"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full rounded-lg border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm outline-none focus:border-busway-blue"
+        />
+      </div>
 
-        <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((e) => (
-            <article key={e.id} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-base font-extrabold text-navy">{e.nombre}</h2>
-                  <p className="mt-1 text-sm text-slate-500">{e.distrito}</p>
-                  <p className="mt-3 text-sm font-semibold text-slate-400">
-                    {e.rutas} rutas - {e.conductores} conductores
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
-                    {e.estado}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(e.id)}
-                    className="w-9 h-9 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 flex items-center justify-center transition"
-                    title="Eliminar escuela"
-                    aria-label="Eliminar escuela"
-                  >
-                    <FiTrash2 size={16} />
-                  </button>
-                </div>
+      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+        {filtered.map((e) => (
+          <article key={e._id} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h2 className="text-base font-extrabold text-navy">{e.nombre}</h2>
+                <p className="mt-1 text-sm text-slate-500">{e.distrito}</p>
+                <p className="mt-3 text-sm font-semibold text-slate-400">
+                  {e.rutas} rutas · {e.conductores} conductores
+                </p>
               </div>
-            </article>
-          ))}
-
-          {filtered.length === 0 && (
-            <div className="rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
-              No se encontraron escuelas.
+              <div className="flex items-center gap-2">
+                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+                  {e.estado}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(e._id)}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition"
+                  aria-label="Eliminar escuela"
+                >
+                  <FiTrash2 size={16} />
+                </button>
+              </div>
             </div>
-          )}
-        </div>
+          </article>
+        ))}
+        {filtered.length === 0 && (
+          <div className="rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
+            No se encontraron escuelas.
+          </div>
+        )}
       </div>
 
       {showModal && (

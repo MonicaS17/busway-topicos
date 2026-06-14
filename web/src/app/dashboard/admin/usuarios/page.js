@@ -1,22 +1,32 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FiPlus, FiSearch, FiShield, FiUsers, FiX } from 'react-icons/fi';
-
-const initialUsers = [
-  { id: 1, nombre: 'Carlos Rodriguez', email: 'carlos@email.com', rol: 'Conductor', status: 'Activo', fecha: '10 jun 2026' },
-  { id: 2, nombre: 'Maria Gonzalez', email: 'maria@email.com', rol: 'Padre', status: 'Activo', fecha: '09 jun 2026' },
-  { id: 3, nombre: 'Luis Herrera', email: 'luis@email.com', rol: 'Conductor', status: 'Bloqueado', fecha: '08 jun 2026' },
-  { id: 4, nombre: 'Ana Martinez', email: 'ana@email.com', rol: 'Padre', status: 'Activo', fecha: '07 jun 2026' },
-  { id: 5, nombre: 'Roberto Diaz', email: 'roberto@email.com', rol: 'Conductor', status: 'Activo', fecha: '06 jun 2026' },
-  { id: 6, nombre: 'Sandra Lopez', email: 'sandra@email.com', rol: 'Padre', status: 'Activo', fecha: '05 jun 2026' },
-];
+import { api } from '@/lib/api';
 
 export default function UsuariosPage() {
-  const [users, setUsers] = useState(initialUsers);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterRol, setFilterRol] = useState('Todos');
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ nombre: '', email: '', rol: 'Padre' });
+
+  useEffect(() => {
+    api.getUsuarios()
+      .then((data) => {
+        const mapeados = data.usuarios.map((u) => ({
+          id: u._id,
+          nombre: `${u.nombre} ${u.apellido}`,
+          email: u.correo,
+          rol: u.tipo === 'conductor' ? 'Conductor' : u.tipo === 'padre' ? 'Padre' : 'Admin',
+          status: u.estado === 'activo' ? 'Activo' : 'Bloqueado',
+          fecha: new Date(u.fecha_registro).toLocaleDateString('es-PA'),
+        }));
+        setUsers(mapeados);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
 
   const filtered = users.filter((u) => {
     const matchSearch =
@@ -26,29 +36,39 @@ export default function UsuariosPage() {
     return matchSearch && matchRol;
   });
 
-  const toggleStatus = (id) => {
-    setUsers(users.map((u) =>
-      u.id === id ? { ...u, status: u.status === 'Activo' ? 'Bloqueado' : 'Activo' } : u
-    ));
+  const toggleStatus = async (id, statusActual) => {
+    const nuevoEstado = statusActual === 'Activo' ? 'bloqueado' : 'activo';
+    try {
+      await api.toggleEstadoUsuario(id, nuevoEstado);
+      setUsers(users.map((u) =>
+        u.id === id ? { ...u, status: nuevoEstado === 'activo' ? 'Activo' : 'Bloqueado' } : u
+      ));
+    } catch (err) {
+      alert('Error al cambiar estado: ' + err.message);
+    }
   };
 
   const handleCreate = () => {
     if (!form.nombre || !form.email) return;
-
-    setUsers([
-      {
-        id: Date.now(),
-        nombre: form.nombre,
-        email: form.email,
-        rol: form.rol,
-        status: 'Activo',
-        fecha: '13 jun 2026',
-      },
-      ...users,
-    ]);
+    setUsers([{
+      id: Date.now(),
+      nombre: form.nombre,
+      email: form.email,
+      rol: form.rol,
+      status: 'Activo',
+      fecha: new Date().toLocaleDateString('es-PA'),
+    }, ...users]);
     setForm({ nombre: '', email: '', rol: 'Padre' });
     setShowModal(false);
   };
+
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <p className="text-sm text-slate-500">Cargando usuarios...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 lg:p-8">
@@ -148,7 +168,7 @@ export default function UsuariosPage() {
                   <td className="px-5 py-4">
                     <button
                       type="button"
-                      onClick={() => toggleStatus(u.id)}
+                      onClick={() => toggleStatus(u.id, u.status)}
                       className={[
                         'inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold transition',
                         u.status === 'Activo'
@@ -191,7 +211,6 @@ export default function UsuariosPage() {
                 <FiX size={18} />
               </button>
             </div>
-
             <div className="mt-5 space-y-4">
               <label className="block">
                 <span className="mb-1 block text-sm font-semibold text-slate-700">Nombre completo</span>
@@ -203,7 +222,7 @@ export default function UsuariosPage() {
                 />
               </label>
               <label className="block">
-                <span className="mb-1 block text-sm font-semibold text-slate-700">Correo electronico</span>
+                <span className="mb-1 block text-sm font-semibold text-slate-700">Correo electrónico</span>
                 <input
                   type="email"
                   value={form.email}
@@ -223,7 +242,6 @@ export default function UsuariosPage() {
                 </select>
               </label>
             </div>
-
             <div className="mt-6 flex gap-3">
               <button
                 type="button"

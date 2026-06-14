@@ -1,1 +1,18 @@
-export function middleware() {}
+import { NextResponse } from 'next/server';
+
+export function middleware(request) {
+  const token = request.cookies.get('busway_token')?.value;
+  const { pathname } = request.nextUrl;
+
+  const esDashboard = pathname.startsWith('/dashboard');
+
+  if (esDashboard && !token) {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: ['/dashboard/:path*'],
+};

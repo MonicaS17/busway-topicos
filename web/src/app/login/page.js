@@ -4,11 +4,13 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { FiLock, FiMail, FiUserCheck } from 'react-icons/fi';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 import Navbar from '@/components/Navbar';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ email: '', password: '', role: 'admin' });
+  const [form, setForm] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -18,11 +20,50 @@ export default function LoginPage() {
     setError('');
 
     try {
-      if (form.role === 'admin') router.push('/dashboard/admin');
-      else if (form.role === 'conductor') router.push('/dashboard/conductor');
-      else router.push('/dashboard/padre');
-    } catch {
-      setError('Correo o contrasena incorrectos. Intentalo de nuevo.');
+      // 1. Autenticar con Firebase
+      const credencial = await signInWithEmailAndPassword(auth, form.email, form.password);
+      const token = await credencial.user.getIdToken();
+
+      // 2. Guardar token en localStorage y cookie
+      localStorage.setItem('busway_token', token);
+      document.cookie = `busway_token=${token}; path=/; max-age=3600`;
+
+      // 3. Verificar en el backend y obtener rol
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || 'Error al iniciar sesión');
+        setLoading(false);
+        return;
+      }
+
+      // 4. Guardar datos del usuario
+      localStorage.setItem('busway_usuario', JSON.stringify(data.usuario));
+
+      // 5. Redirigir según rol real
+      const rol = data.usuario.tipo;
+      if (rol === 'administrador') router.push('/dashboard/admin');
+      else if (rol === 'conductor') router.push('/dashboard/conductor');
+      else if (rol === 'padre') router.push('/dashboard/padre');
+      else setError('Rol no reconocido. Contacta al administrador.');
+
+    } catch (err) {
+      const mensajes = {
+        'auth/invalid-credential': 'Correo o contraseña incorrectos',
+        'auth/user-not-found': 'No existe una cuenta con este correo',
+        'auth/wrong-password': 'Contraseña incorrecta',
+        'auth/too-many-requests': 'Demasiados intentos. Espera unos minutos',
+        'auth/network-request-failed': 'Error de conexión. Verifica tu internet',
+      };
+      setError(mensajes[err.code] || 'Error al iniciar sesión');
     } finally {
       setLoading(false);
     }
@@ -44,11 +85,9 @@ export default function LoginPage() {
                 priority
               />
             </span>
-
             <h1 className="mt-5 text-6xl font-black tracking-tight">
               Bus<span className="text-busway-blue">Way</span>
             </h1>
-
             <p className="mt-4 max-w-md text-xl font-medium leading-8 text-white/75">
               Tus hijos <span className="text-busway-blue">seguros</span> en cada ruta
             </p>
@@ -62,7 +101,7 @@ export default function LoginPage() {
                 Bienvenido
               </p>
               <h2 className="mt-2 text-4xl font-black text-navy">
-                Inicio de sesion
+                Inicio de sesión
               </h2>
               <p className="mt-3 text-sm leading-6 text-slate-500">
                 Ingresa tus credenciales para acceder a BusWay.
@@ -78,25 +117,7 @@ export default function LoginPage() {
 
               <label className="block">
                 <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-navy">
-                  Ingresar como
-                </span>
-                <div className="relative">
-                  <FiUserCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                  <select
-                    value={form.role}
-                    onChange={(e) => setForm({ ...form, role: e.target.value })}
-                    className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-100 py-4 pl-12 pr-4 text-sm font-medium text-slate-700 outline-none transition focus:border-busway-blue focus:bg-white"
-                  >
-                    <option value="admin">Administrador</option>
-                    <option value="conductor">Conductor</option>
-                    <option value="padre">Padre de familia</option>
-                  </select>
-                </div>
-              </label>
-
-              <label className="block">
-                <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-navy">
-                  Correo electronico
+                  Correo electrónico
                 </span>
                 <div className="relative">
                   <FiMail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -113,7 +134,7 @@ export default function LoginPage() {
 
               <label className="block">
                 <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-navy">
-                  Contrasena
+                  Contraseña
                 </span>
                 <div className="relative">
                   <FiLock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -122,7 +143,7 @@ export default function LoginPage() {
                     required
                     value={form.password}
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    placeholder="********"
+                    placeholder="••••••••"
                     className="w-full rounded-xl border border-slate-200 bg-slate-100 py-4 pl-12 pr-4 text-sm outline-none transition focus:border-busway-blue focus:bg-white"
                   />
                 </div>
@@ -133,12 +154,12 @@ export default function LoginPage() {
                 disabled={loading}
                 className="w-full rounded-xl bg-busway-yellow py-4 text-sm font-extrabold text-navy shadow-md transition hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {loading ? 'Ingresando...' : 'Iniciar sesion'}
+                {loading ? 'Ingresando...' : 'Iniciar sesión'}
               </button>
 
               <div className="text-center">
                 <a href="#" className="text-sm font-semibold text-navy transition hover:text-busway-blue">
-                  Olvidaste tu contrasena?
+                  ¿Olvidaste tu contraseña?
                 </a>
               </div>
             </form>

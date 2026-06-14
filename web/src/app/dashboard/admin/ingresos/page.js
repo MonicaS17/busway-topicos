@@ -1,23 +1,37 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FiBarChart2, FiDownload } from 'react-icons/fi';
-
-const monthlyIncome = [
-  { month: 'Noviembre 2025', amount: '$1,865.02' },
-  { month: 'Octubre 2025', amount: '$1,796.44' },
-  { month: 'Septiembre 2025', amount: '$1,743.78' },
-  { month: 'Agosto 2025', amount: '$1,612.20' },
-];
-
-const payments = [
-  { id: 'PAY-001', padre: 'Maria Gonzalez', conductor: 'Carlos Rodriguez', monto: '$85.00', fecha: '01 jun 2026', status: 'Exitoso' },
-  { id: 'PAY-002', padre: 'Sandra Lopez', conductor: 'Roberto Diaz', monto: '$90.00', fecha: '01 jun 2026', status: 'Exitoso' },
-  { id: 'PAY-003', padre: 'Pedro Nunez', conductor: 'Carlos Rodriguez', monto: '$85.00', fecha: '01 jun 2026', status: 'Fallido' },
-];
+import { api } from '@/lib/api';
 
 export default function IngresosPage() {
+  const [pagos, setPagos] = useState([]);
+  const [totalMes, setTotalMes] = useState(0);
+  const [totalAnio, setTotalAnio] = useState(0);
+  const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('Todos');
-  const filtered = filterStatus === 'Todos' ? payments : payments.filter((p) => p.status === filterStatus);
+
+  useEffect(() => {
+    api.getPagos()
+      .then((data) => {
+        setPagos(data.pagos);
+        setTotalMes(data.totalMes);
+        setTotalAnio(data.totalAnio);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = filterStatus === 'Todos'
+    ? pagos
+    : pagos.filter((p) => p.status === filterStatus);
+
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <p className="text-sm text-slate-500">Cargando ingresos...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 lg:p-8">
@@ -33,21 +47,12 @@ export default function IngresosPage() {
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="rounded-lg border border-slate-200 p-5 text-center">
             <p className="text-xs font-bold text-slate-500">Este mes</p>
-            <p className="mt-2 text-3xl font-extrabold text-navy">$1,865</p>
+            <p className="mt-2 text-3xl font-extrabold text-navy">${totalMes.toFixed(2)}</p>
           </div>
           <div className="rounded-lg border border-slate-200 p-5 text-center">
-            <p className="text-xs font-bold text-slate-500">Este ano</p>
-            <p className="mt-2 text-3xl font-extrabold text-navy">$18,240</p>
+            <p className="text-xs font-bold text-slate-500">Este año</p>
+            <p className="mt-2 text-3xl font-extrabold text-navy">${totalAnio.toFixed(2)}</p>
           </div>
-        </div>
-
-        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {monthlyIncome.map((row) => (
-            <div key={row.month} className="rounded-lg border border-slate-200 px-4 py-3">
-              <span className="text-sm font-bold text-slate-700">{row.month}</span>
-              <span className="mt-2 block text-xl font-extrabold text-navy">{row.amount}</span>
-            </div>
-          ))}
         </div>
 
         <div className="mt-5 flex flex-wrap gap-3">
@@ -55,7 +60,7 @@ export default function IngresosPage() {
             <button
               key={format}
               type="button"
-              onClick={() => alert(`Exportar ${format} - conectar con la API`)}
+              onClick={() => alert(`Exportar ${format} — conectar con la API`)}
               className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-navy hover:border-busway-blue hover:bg-blue-50/50 transition"
             >
               <FiDownload size={15} />
@@ -88,7 +93,7 @@ export default function IngresosPage() {
           <table className="w-full text-sm">
             <thead className="bg-busway-yellow text-navy">
               <tr>
-                {['ID', 'Padre', 'Conductor', 'Monto', 'Estado'].map((h) => (
+                {['ID', 'Padre', 'Conductor', 'Monto', 'Fecha', 'Estado'].map((h) => (
                   <th key={h} className="px-5 py-3 text-left text-xs font-extrabold uppercase tracking-wide">
                     {h}
                   </th>
@@ -98,10 +103,11 @@ export default function IngresosPage() {
             <tbody className="divide-y divide-slate-100">
               {filtered.map((p) => (
                 <tr key={p.id} className="hover:bg-slate-50">
-                  <td className="px-5 py-4 font-mono text-xs text-slate-500">{p.id}</td>
+                  <td className="px-5 py-4 font-mono text-xs text-slate-500">{String(p.id).slice(-6).toUpperCase()}</td>
                   <td className="px-5 py-4 font-semibold text-slate-800">{p.padre}</td>
                   <td className="px-5 py-4 text-slate-600">{p.conductor}</td>
                   <td className="px-5 py-4 font-extrabold text-navy">{p.monto}</td>
+                  <td className="px-5 py-4 text-xs text-slate-400">{p.fecha}</td>
                   <td className="px-5 py-4">
                     <span className={[
                       'rounded-full px-3 py-1 text-xs font-bold',
@@ -112,6 +118,13 @@ export default function IngresosPage() {
                   </td>
                 </tr>
               ))}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-5 py-10 text-center text-sm text-slate-500">
+                    No hay pagos registrados.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

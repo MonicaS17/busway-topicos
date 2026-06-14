@@ -31,7 +31,18 @@ npm install
 
 ## Variables de entorno
 
-Crea un archivo `.env.local` dentro de la carpeta `web/`:
+Crea un archivo `.env.local` dentro de la carpeta `web/` con esto:
+
+```env
+NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSyAclgtm5KOqpg1Py2zGOGjd2vZFeg_Dhn0
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=busway-168c2.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=busway-168c2
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=busway-168c2.firebasestorage.app
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=997158856914
+NEXT_PUBLIC_FIREBASE_APP_ID=1:997158856914:web:331173cc15c93dbb52250b
+
+NEXT_PUBLIC_API_URL=http://localhost:3000
+```
 
 > ⚠️ Este archivo **no se sube a GitHub** — ya está en `.gitignore`.
 
