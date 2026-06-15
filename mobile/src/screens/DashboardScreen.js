@@ -101,7 +101,7 @@ export default function DashboardScreen({ navigation, route }) {
             <Text style={styles.headerTitle}>{usuario.nombre} {usuario.apellido}</Text>
           </View>
 
-          {/* BOTÓN OVALADO "PERFIL" */}
+          {/* BOTÓN "PERFIL" */}
           <TouchableOpacity
             style={styles.btnPerfil}
             onPress={() => navigation.navigate('Perfil', { usuario })}
@@ -123,11 +123,18 @@ export default function DashboardScreen({ navigation, route }) {
             onPress={() => navigation.navigate('Perfil', { usuario })}
             activeOpacity={0.85}
           >
-            <View style={[styles.avatar, { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }]}>
-              <Text style={styles.avatarText}>
-                {usuario.nombre.charAt(0)}{usuario.apellido.charAt(0)}
-              </Text>
-            </View>
+            {usuario.foto_perfil ? (
+              <Image
+                source={{ uri: usuario.foto_perfil }}
+                style={{ width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }}
+              />
+            ) : (
+              <View style={[styles.avatar, { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }]}>
+                <Text style={styles.avatarText}>
+                  {usuario.nombre.charAt(0)}{usuario.apellido.charAt(0)}
+                </Text>
+              </View>
+            )}
             <View style={styles.perfilInfo}>
               <Text style={styles.nombre}>{usuario.nombre} {usuario.apellido}</Text>
               <View style={styles.tipoBadge}>
@@ -258,7 +265,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
 
-  // BOTÓN OVALADO "PERFIL"
+  // BOTÓN "PERFIL"
   btnPerfil: {
     flexDirection: 'row',
     alignItems: 'center',
