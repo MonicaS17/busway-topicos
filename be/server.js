@@ -9,7 +9,7 @@ const authRoutes = require('./routes/auth');
 const escuelasRoutes = require('./routes/escuelas');
 const pagosRoutes = require('./routes/pagos');
 const { router: conductorRoutes } = require('./routes/conductor');
-const padreRoutes = require('./routes/padre');
+const padreRoutes = require('./routes/padres');
 
 const app = express();
 
