@@ -1,15 +1,39 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity,
-  StyleSheet, StatusBar, ScrollView, useWindowDimensions
+  StyleSheet, StatusBar, ScrollView, useWindowDimensions, ActivityIndicator, Image
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { auth } from '../config/firebase';
+import api from '../config/api';
 
 export default function PerfilScreen({ navigation, route }) {
   const { usuario } = route.params;
   const { width } = useWindowDimensions();
   const avatarSize = Math.min(width * 0.22, 96);
+
+  const [cantidadHijos, setCantidadHijos] = useState(null);
+
+  //CARGAR CANTIDAD DE HIJOS (solo padres)
+  useEffect(() => {
+    if (usuario.tipo !== 'padre') return;
+
+    const cargarHijos = async () => {
+      try {
+        const token = await auth.currentUser.getIdToken();
+        const response = await api.get('/api/padre/mis-hijos', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setCantidadHijos(response.data.hijos?.length || 0);
+      } catch (error) {
+        console.error('Error al cargar hijos:', error);
+        setCantidadHijos(0);
+      }
+    };
+
+    cargarHijos();
+  }, [usuario.tipo]);
 
   const datosGenerales = [
     { icon: 'person-outline', label: 'Nombre completo', value: `${usuario.nombre} ${usuario.apellido}` },
@@ -24,7 +48,11 @@ export default function PerfilScreen({ navigation, route }) {
   ];
 
   const datosPadre = [
-    { icon: 'people-outline', label: 'Hijos registrados', value: usuario.datos_padre?.hijos?.length?.toString() || '0' },
+    {
+      icon: 'people-outline',
+      label: 'Hijos registrados',
+      value: cantidadHijos === null ? '...' : cantidadHijos.toString()
+    },
     { icon: 'card-outline', label: 'Tarjeta registrada', value: usuario.datos_padre?.ultimos_4_digitos ? `•••• ${usuario.datos_padre.ultimos_4_digitos}` : 'No registrada' },
   ];
 
@@ -52,11 +80,18 @@ export default function PerfilScreen({ navigation, route }) {
 
           {/* Avatar grande */}
           <View style={styles.avatarWrap}>
-            <View style={[styles.avatar, { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }]}>
-              <Text style={[styles.avatarText, { fontSize: avatarSize * 0.35 }]}>
-                {usuario.nombre.charAt(0)}{usuario.apellido.charAt(0)}
-              </Text>
-            </View>
+            {usuario.foto_perfil ? (
+              <Image
+                source={{ uri: usuario.foto_perfil }}
+                style={{ width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2, marginBottom: 14 }}
+              />
+            ) : (
+              <View style={[styles.avatar, { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }]}>
+                <Text style={[styles.avatarText, { fontSize: avatarSize * 0.35 }]}>
+                  {usuario.nombre.charAt(0)}{usuario.apellido.charAt(0)}
+                </Text>
+              </View>
+            )}
             <Text style={styles.nombre}>{usuario.nombre} {usuario.apellido}</Text>
             <View style={styles.tipoBadge}>
               <Ionicons
@@ -94,7 +129,11 @@ export default function PerfilScreen({ navigation, route }) {
             {datosExtra.map((item, i) => (
               <View key={i} style={[styles.infoRow, i < datosExtra.length - 1 && styles.infoRowBorder]}>
                 <View style={styles.infoIconCircle}>
-                  <Ionicons name={item.icon} size={18} color="#0D1B3E" />
+                  {item.value === '...' ? (
+                    <ActivityIndicator size="small" color="#0D1B3E" />
+                  ) : (
+                    <Ionicons name={item.icon} size={18} color="#0D1B3E" />
+                  )}
                 </View>
                 <View style={styles.infoTextGroup}>
                   <Text style={styles.infoLabel}>{item.label}</Text>

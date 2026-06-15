@@ -1,22 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const mongoose = require('mongoose');
 const verifyToken = require('../middleware/verifyToken');
 
-const Usuario = mongoose.model('usuarios');
-const Vehiculo = mongoose.model('vehiculos');
-
-// Esquema de estudiantes
-const estudianteSchema = new mongoose.Schema({
-  nombre: { type: String, required: true },
-  apellido: { type: String, required: true },
-  escuela: { type: String, required: true },
-  ruta: { type: String, required: true },
-  conductor_id: { type: mongoose.Schema.Types.ObjectId, ref: 'usuarios', required: true },
-  estado: { type: String, default: 'Activo' },
-});
-
-const Estudiante = mongoose.models.estudiantes || mongoose.model('estudiantes', estudianteSchema);
+// Importamos los modelos 
+const Usuario = require('../models/Usuario');
+const Vehiculo = require('../models/Vehiculo');
+const Estudiante = require('../models/Estudiante');
 
 // GET perfil del conductor + vehículo
 router.get('/perfil', verifyToken, async (req, res) => {
@@ -32,10 +21,13 @@ router.get('/perfil', verifyToken, async (req, res) => {
   }
 });
 
-// GET estudiantes del conductor
+// GET estudiantes asignados a este conductor
 router.get('/estudiantes', verifyToken, async (req, res) => {
   try {
     const usuario = await Usuario.findOne({ firebase_uid: req.user.uid });
+    if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+    // Busca en la colección unificada todos los niños que tengan el ID de este conductor
     const estudiantes = await Estudiante.find({ conductor_id: usuario._id });
     res.json({ estudiantes });
   } catch (error) {
@@ -43,4 +35,4 @@ router.get('/estudiantes', verifyToken, async (req, res) => {
   }
 });
 
-module.exports = { router, Estudiante };
+module.exports = router;

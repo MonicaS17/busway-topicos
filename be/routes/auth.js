@@ -1,42 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const mongoose = require('mongoose');
 const verifyToken = require('../middleware/verifyToken');
+const Usuario = require('../models/Usuario');
+const Vehiculo = require('../models/Vehiculo');
 
-// ── MODELOS ──────────────────────────────────────────────
-
-const usuarioSchema = new mongoose.Schema({
-  firebase_uid: { type: String, required: true, unique: true },
-  nombre: { type: String, required: true },
-  apellido: { type: String, required: true },
-  correo: { type: String, required: true, unique: true },
-  cedula: { type: String, required: true, unique: true },
-  tipo: { type: String, enum: ['conductor', 'padre', 'administrador'], required: true },
-  foto_perfil: { type: String, default: null },
-  estado: { type: String, default: 'activo' },
-  fcm_token: [{ type: String }],
-  fecha_registro: { type: Date, default: Date.now },
-  datos_conductor: { type: Object, default: null },
-  datos_padre: { type: Object, default: null },
-  datos_admin: { type: Object, default: null }
-});
-
-const vehiculoSchema = new mongoose.Schema({
-  conductor_id: { type: mongoose.Schema.Types.ObjectId, ref: 'usuarios', required: true },
-  placa: { type: String, required: true, unique: true },
-  marca: { type: String, required: true },
-  modelo: { type: String, required: true },
-  anio: { type: Number, required: true },
-  num_asientos: { type: Number, required: true },
-  estado_verificacion: { type: String, default: 'pendiente' },
-  fecha_vencimiento_verificacion: { type: Date, default: null }
-});
-
-const Usuario = mongoose.model('usuarios', usuarioSchema);
-const Vehiculo = mongoose.model('vehiculos', vehiculoSchema);
-
-// ── VALIDACIONES BACKEND ─────────────────────────────────
-
+//VALIDACIONES BACKEND 
 const validarCedula = (cedula) => {
   const panameño = /^\d{1,2}-\d{3,4}-\d{1,6}$/;
   const extranjero = /^E-\d{1,2}-\d{1,6}$/;
@@ -49,16 +17,15 @@ const validarCorreo = (correo) => {
   return regex.test(correo);
 };
 
-// ── REGISTRO ─────────────────────────────────────────────
+//REGISTRO
 router.post('/register', async (req, res) => {
   try {
     const {
       firebase_uid, nombre, apellido,
-      correo, cedula, tipo,
+      correo, cedula, tipo, foto_perfil,
       datos_conductor, datos_padre, vehiculo
     } = req.body;
 
-    // Validaciones
     if (!firebase_uid || !nombre || !apellido || !correo || !cedula || !tipo) {
       return res.status(400).json({
         error: 'Faltan campos obligatorios',
@@ -80,7 +47,6 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    // Verificar duplicados
     const correoExiste = await Usuario.findOne({ correo });
     if (correoExiste) {
       return res.status(400).json({ error: 'Este correo ya está registrado en BusWay' });
@@ -91,7 +57,6 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Esta cédula ya está registrada en BusWay' });
     }
 
-    // Crear usuario
     const nuevoUsuario = new Usuario({
       firebase_uid,
       nombre,
@@ -99,13 +64,13 @@ router.post('/register', async (req, res) => {
       correo,
       cedula,
       tipo,
+      foto_perfil: foto_perfil || null,
       datos_conductor: datos_conductor || null,
       datos_padre: datos_padre || null,
     });
 
     await nuevoUsuario.save();
 
-    // Si es conductor guardar vehículo
     if (tipo === 'conductor' && vehiculo) {
       const placaExiste = await Vehiculo.findOne({ placa: vehiculo.placa });
       if (placaExiste) {
@@ -146,7 +111,7 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// ── LOGIN ─────────────────────────────────────────────────
+//LOGIN 
 router.post('/login', verifyToken, async (req, res) => {
   try {
     const usuario = await Usuario.findOne({ firebase_uid: req.user.uid });
@@ -163,16 +128,14 @@ router.post('/login', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Tu cuenta está inactiva' });
     }
 
-    // Si es conductor devolver también el vehículo
-    let vehiculo = null;
+    const usuarioRespuesta = usuario.toObject();
     if (usuario.tipo === 'conductor') {
-      vehiculo = await Vehiculo.findOne({ conductor_id: usuario._id });
+      usuarioRespuesta.vehiculo = await Vehiculo.findOne({ conductor_id: usuario._id });
     }
 
     res.json({
       mensaje: 'Login exitoso',
-      usuario,
-      vehiculo
+      usuario: usuarioRespuesta
     });
 
   } catch (error) {
@@ -180,7 +143,7 @@ router.post('/login', verifyToken, async (req, res) => {
   }
 });
 
-// ── PERFIL (ruta protegida) ───────────────────────────────
+//PERFIL (ruta protegida)
 router.get('/perfil', verifyToken, async (req, res) => {
   try {
     const usuario = await Usuario.findOne({ firebase_uid: req.user.uid });
@@ -189,19 +152,19 @@ router.get('/perfil', verifyToken, async (req, res) => {
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
-    let vehiculo = null;
+    const usuarioRespuesta = usuario.toObject();
     if (usuario.tipo === 'conductor') {
-      vehiculo = await Vehiculo.findOne({ conductor_id: usuario._id });
+      usuarioRespuesta.vehiculo = await Vehiculo.findOne({ conductor_id: usuario._id });
     }
 
-    res.json({ usuario, vehiculo });
+    res.json({ usuario: usuarioRespuesta });
 
   } catch (error) {
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
 
-// ── LISTA DE USUARIOS ─────────────────────────────────────
+//LISTA DE USUARIOS
 router.get('/usuarios', verifyToken, async (req, res) => {
   try {
     const usuarios = await Usuario.find();

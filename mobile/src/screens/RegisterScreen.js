@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, StatusBar, ActivityIndicator,
-  Alert, ScrollView, KeyboardAvoidingView, Platform
+  Alert, ScrollView, KeyboardAvoidingView, Platform, Image
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { reconocerTexto } from '../config/vision';
@@ -13,6 +13,11 @@ import {
   validarCorreo, validarContrasena,
   validarTelefono, mensajeFirebase
 } from '../utils/validaciones';
+import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from '@expo/vector-icons';
+import { subirFotoACloudinary } from '../config/cloudinary';
+
+const CEDULA_REGEX = /^(\d{1,2}-\d{3,4}-\d{1,6}|E-\d{1,2}-\d{1,6}|PE-\d{3,4}-\d{1,6})$/;
 
 export default function RegisterScreen({ navigation, route }) {
   const { tipo } = route.params;
@@ -31,11 +36,13 @@ export default function RegisterScreen({ navigation, route }) {
   const [contrasena, setContrasena] = useState('');
   const [telefono, setTelefono] = useState('');
 
-  // Estados OCR
+  // Foto de perfil (ambos)
+  const [fotoPerfil, setFotoPerfil] = useState(null);
+
+  // Estados OCR (solo conductor)
   const [cedulaOcrValidada, setCedulaOcrValidada] = useState(false);
   const [licenciaOcrValidada, setLicenciaOcrValidada] = useState(false);
   const [letraLicencia, setLetraLicencia] = useState('');
-  const [facialVerificado, setFacialVerificado] = useState(false);
 
   // Datos del vehículo
   const [placa, setPlaca] = useState('');
@@ -48,9 +55,10 @@ export default function RegisterScreen({ navigation, route }) {
   const [estadoATTT, setEstadoATTT] = useState(null);
   const [verificandoATTT, setVerificandoATTT] = useState(false);
 
-  const totalPasos = tipo === 'conductor' ? 5 : 3;
+  // El padre ahora solo tiene 2 pasos: datos + resumen
+  const totalPasos = tipo === 'conductor' ? 5 : 2;
 
-  // ── VALIDAR PASO 1 ──────────────────────────────────────
+  //VALIDAR PASO 1 
   const validarPaso1 = () => {
     if (!nombre.trim()) {
       Alert.alert('Campo requerido', 'Por favor ingresa tu nombre');
@@ -76,6 +84,7 @@ export default function RegisterScreen({ navigation, route }) {
       Alert.alert('Contraseña débil', 'La contraseña debe tener al menos 6 caracteres');
       return false;
     }
+
     if (tipo === 'conductor') {
       if (!telefono.trim()) {
         Alert.alert('Campo requerido', 'Por favor ingresa tu teléfono de contacto');
@@ -86,12 +95,24 @@ export default function RegisterScreen({ navigation, route }) {
         return false;
       }
     }
+
+    // El padre ingresa su cédula directamente sin OCR
+    if (tipo === 'padre') {
+      if (!cedula.trim()) {
+        Alert.alert('Campo requerido', 'Por favor ingresa tu número de cédula');
+        return false;
+      }
+      if (!CEDULA_REGEX.test(cedula.trim())) {
+        Alert.alert('Cédula inválida', 'Formato esperado: 8-123-456, E-8-123456 o PE-1234-123456');
+        return false;
+      }
+    }
+
     return true;
   };
 
-  // ── VALIDAR PASO VEHÍCULO ────────────────────────────────
+  //VALIDAR PASO VEHÍCULO
   const validarPasoVehiculo = () => {
-    if (tipo === 'padre') return true;
     if (!placa.trim()) {
       Alert.alert('Campo requerido', 'Por favor ingresa la placa del bus');
       return false;
@@ -115,7 +136,7 @@ export default function RegisterScreen({ navigation, route }) {
     return true;
   };
 
-  // ── SIMULACIÓN ATTT ──────────────────────────────────────
+  //SIMULACIÓN ATTT 
   const simularVerificacionATTT = async () => {
     if (!validarPasoVehiculo()) return;
     setVerificandoATTT(true);
@@ -133,7 +154,7 @@ export default function RegisterScreen({ navigation, route }) {
     setPaso(5);
   };
 
-  // ── ABRIR CÁMARA ─────────────────────────────────────────
+  //ABRIR CÁMARA (documentos: cédula / licencia) 
   const escanearDocumento = async (modoEscaneo) => {
     if (!permission?.granted) {
       const result = await requestPermission();
@@ -146,19 +167,59 @@ export default function RegisterScreen({ navigation, route }) {
     setCamaraActiva(true);
   };
 
-  const verificarRostro = async () => {
+  //ABRIR CÁMARA (foto de perfil) 
+  const abrirCamaraFoto = async () => {
     if (!permission?.granted) {
       const result = await requestPermission();
       if (!result.granted) {
-        Alert.alert('Permiso requerido', 'Necesitamos acceso a la cámara para verificar tu identidad');
+        Alert.alert('Permiso requerido', 'Necesitamos acceso a la cámara para tu foto de perfil');
         return;
       }
     }
-    setModoCamara('facial');
+    setModoCamara('foto');
     setCamaraActiva(true);
   };
 
-  // ── TOMAR FOTO ───────────────────────────────────────────
+  //ELEGIR FOTO DESDE LA GALERÍA 
+  const elegirFotoGaleria = async () => {
+    const permiso = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permiso.granted) {
+      Alert.alert('Permiso requerido', 'Necesitamos acceso a tu galería para elegir una foto');
+      return;
+    }
+
+    const resultado = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.5,
+      base64: true,
+    });
+
+    if (!resultado.canceled) {
+      const asset = resultado.assets[0];
+      if (asset.base64) {
+        setFotoPerfil(`data:image/jpg;base64,${asset.base64}`);
+      } else {
+        setFotoPerfil(asset.uri);
+      }
+    }
+  };
+
+  // MENÚ PARA ELEGIR ORIGEN DE LA FOTO 
+  const seleccionarFoto = () => {
+    Alert.alert(
+      'Foto de perfil',
+      '¿Cómo quieres agregar tu foto?',
+      [
+        { text: 'Tomar foto', onPress: abrirCamaraFoto },
+        { text: 'Elegir de galería', onPress: elegirFotoGaleria },
+        { text: 'Cancelar', style: 'cancel' },
+      ]
+    );
+  };
+
+  //TOMAR FOTO (OCR de documentos) 
   const tomarFoto = async () => {
     if (!cameraRef.current) {
       Alert.alert('Error', 'La cámara no está lista. Intenta de nuevo.');
@@ -169,7 +230,7 @@ export default function RegisterScreen({ navigation, route }) {
       const foto = await cameraRef.current.takePictureAsync({ quality: 0.8 });
       setCamaraActiva(false);
       const texto = await reconocerTexto(foto.uri);
-      console.log('📄 Texto reconocido:', texto);
+      console.log('Texto reconocido:', texto);
       if (modoCamara === 'cedula') procesarOCRCedula(texto);
       else if (modoCamara === 'licencia') procesarOCRLicencia(texto);
     } catch (_error) {
@@ -179,22 +240,22 @@ export default function RegisterScreen({ navigation, route }) {
     }
   };
 
-  const capturarRostro = async () => {
+  //CAPTURAR FOTO DE PERFIL 
+  const capturarFotoPerfil = async () => {
     if (!cameraRef.current) return;
     try {
       setCargando(true);
-      await cameraRef.current.takePictureAsync({ quality: 0.8 });
+      const foto = await cameraRef.current.takePictureAsync({ quality: 0.5, base64: true });
       setCamaraActiva(false);
-      setFacialVerificado(true);
-      Alert.alert('✅ Identidad verificada', 'Tu rostro fue verificado correctamente');
+      setFotoPerfil(`data:image/jpg;base64,${foto.base64}`);
     } catch (_error) {
-      Alert.alert('Error', 'No pudimos verificar tu identidad. Intenta de nuevo');
+      Alert.alert('Error', 'No pudimos tomar la foto. Intenta de nuevo');
     } finally {
       setCargando(false);
     }
   };
 
-  // ── OCR CÉDULA ───────────────────────────────────────────
+  //OCR CÉDULA (solo conductor) 
   const procesarOCRCedula = (texto) => {
     const cedulaRegex = /\d{1,2}-\d{3,4}-\d{1,6}|E-\d{1,2}-\d{1,6}|PE-\d{3,4}-\d{1,6}/;
     const cedulaEncontrada = texto.match(cedulaRegex);
@@ -204,10 +265,10 @@ export default function RegisterScreen({ navigation, route }) {
     }
     setCedula(cedulaEncontrada[0]);
     setCedulaOcrValidada(true);
-    Alert.alert('✅ Cédula verificada', `Cédula detectada: ${cedulaEncontrada[0]}\nVerifica que sea correcta.`);
+    Alert.alert('Cédula verificada', `Cédula detectada: ${cedulaEncontrada[0]}\nVerifica que sea correcta.`);
   };
 
-  // ── OCR LICENCIA ─────────────────────────────────────────
+  //OCR LICENCIA (solo conductor) 
   const procesarOCRLicencia = (texto) => {
     const letrasPermitidas = ['E1', 'E2', 'E3'];
     const letraEncontrada = letrasPermitidas.find(l => texto.includes(l));
@@ -225,7 +286,7 @@ export default function RegisterScreen({ navigation, route }) {
 
     if (cedulaEnLicencia && cedula && cedulaEnLicencia[0] !== cedula) {
       Alert.alert(
-        '⚠️ Cédula no coincide',
+        'Cédula no coincide',
         `La cédula de la licencia (${cedulaEnLicencia[0]}) no coincide con la cédula que escaneaste (${cedula}).\n\nAsegúrate de usar tu propia licencia.`
       );
       return;
@@ -233,49 +294,46 @@ export default function RegisterScreen({ navigation, route }) {
 
     setLetraLicencia(letraEncontrada);
     setLicenciaOcrValidada(true);
-    Alert.alert('✅ Licencia válida', `Tu licencia tiene letra ${letraEncontrada}, permitida para conducir buses escolares en Panamá.`);
+    Alert.alert('Licencia válida', `Tu licencia tiene letra ${letraEncontrada}, permitida para conducir buses escolares en Panamá.`);
   };
 
-  // ── REGISTRO FINAL ───────────────────────────────────────
+  //REGISTRO FINAL
   const handleRegister = async () => {
     try {
       setCargando(true);
       const userCredential = await createUserWithEmailAndPassword(auth, correo, contrasena);
       const firebase_uid = userCredential.user.uid;
 
+      // Si hay foto, se suba a cloudinary y se llama el url
+      let fotoUrl = '';
+      if (fotoPerfil) {
+        fotoUrl = await subirFotoACloudinary(fotoPerfil);
+      }
+
       await api.post('/api/auth/register', {
-        firebase_uid, nombre, apellido, correo, cedula, tipo,
+        firebase_uid,
+        nombre,
+        apellido,
+        correo,
+        cedula,
+        tipo,
+        foto_perfil: fotoUrl,
         datos_conductor: tipo === 'conductor' ? {
           telefono,
-          escuelas_ids: [],
-          zona_cobertura: '',
-          horario_inicio: '',
           cedula_ocr_validada: cedulaOcrValidada,
           licencia_ocr_validada: licenciaOcrValidada,
           estado_verificacion_att: 'aprobado',
-          calificacion_promedio: 0,
-          total_resenas: 0,
-          metodo_pago: null
-        } : null,
-        datos_padre: tipo === 'padre' ? {
-          cedula_ocr_validada: cedulaOcrValidada,
-          facial_verificado: facialVerificado,
-          stripe_customer_id: '',
-          token_tarjeta: '',
-          ultimos_4_digitos: '',
-          hijos: []
         } : null,
         vehiculo: tipo === 'conductor' ? {
           placa, marca, modelo,
           anio: parseInt(anio, 10),
           num_asientos: parseInt(numAsientos, 10),
           estado_verificacion: 'aprobado',
-          fecha_vencimiento_verificacion: null
         } : null
       });
 
       Alert.alert(
-        '🎉 ¡Registro exitoso!',
+        '¡Registro exitoso!',
         tipo === 'conductor'
           ? 'Tu cuenta fue creada y verificada por la ATTT. Ya puedes iniciar sesión.'
           : 'Tu cuenta fue creada correctamente. Ya puedes iniciar sesión.',
@@ -288,7 +346,7 @@ export default function RegisterScreen({ navigation, route }) {
       } else if (error.request) {
         Alert.alert('Error de Red', 'No se pudo conectar con el servidor de BusWay.');
       } else {
-        Alert.alert('Error en el registro', mensajeFirebase(error.code));
+        Alert.alert('Error en el registro', error.message || mensajeFirebase(error.code));
       }
       console.error('Register error:', error);
     } finally {
@@ -296,29 +354,43 @@ export default function RegisterScreen({ navigation, route }) {
     }
   };
 
-  // ── VISTA CÁMARA ─────────────────────────────────────────
+  //VISTA CÁMARA 
   if (camaraActiva) {
+    const iconoCamara =
+      modoCamara === 'cedula' ? 'card-outline' :
+      modoCamara === 'licencia' ? 'document-text-outline' :
+      'person-outline';
+
     return (
       <View style={styles.cameraContainer}>
         <CameraView
           ref={cameraRef}
           style={styles.camera}
-          facing={modoCamara === 'facial' ? 'front' : 'back'}
+          facing={(modoCamara === 'foto') ? 'front' : 'back'}
         />
         <View style={styles.cameraOverlay}>
-          <Text style={styles.cameraTitle}>
-            {modoCamara === 'cedula' && '📄 Apunta al frente de tu cédula'}
-            {modoCamara === 'licencia' && '🪪 Apunta al frente de tu licencia'}
-            {modoCamara === 'facial' && '🤳 Centra tu rostro en la pantalla'}
-          </Text>
-          <View style={styles.cameraFrame} />
+          <View style={styles.cameraTitleWrap}>
+            <Ionicons name={iconoCamara} size={20} color="#fff" />
+            <Text style={styles.cameraTitle}>
+              {modoCamara === 'cedula' && 'Apunta al frente de tu cédula'}
+              {modoCamara === 'licencia' && 'Apunta al frente de tu licencia'}
+              {modoCamara === 'foto' && 'Toma tu foto de perfil'}
+            </Text>
+          </View>
+          <View style={modoCamara === 'foto' ? styles.cameraFrameRedonda : styles.cameraFrame} />
           <TouchableOpacity
             style={styles.btnCapturar}
-            onPress={modoCamara === 'facial' ? capturarRostro : tomarFoto}
+            onPress={modoCamara === 'foto' ? capturarFotoPerfil : tomarFoto}
+            disabled={cargando}
           >
-            <Text style={styles.btnCapturarText}>
-              {cargando ? 'Procesando...' : '📸 Capturar'}
-            </Text>
+            {cargando ? (
+              <ActivityIndicator color="#0D1B3E" />
+            ) : (
+              <>
+                <Ionicons name="camera" size={20} color="#0D1B3E" />
+                <Text style={styles.btnCapturarText}>Capturar</Text>
+              </>
+            )}
           </TouchableOpacity>
           <TouchableOpacity style={styles.btnCancelarCamara} onPress={() => setCamaraActiva(false)}>
             <Text style={styles.btnCancelarCamaraText}>Cancelar</Text>
@@ -328,18 +400,48 @@ export default function RegisterScreen({ navigation, route }) {
     );
   }
 
-  // ── BOTONES DE NAVEGACIÓN REUTILIZABLES ──────────────────
+  //BOTONES DE NAVEGACIÓN REUTILIZABLES 
   const BotonAtras = ({ onPress }) => (
     <TouchableOpacity style={styles.btnAtras} onPress={onPress}>
-      <Text style={styles.btnAtrasArrow}>‹</Text>
+      <Ionicons name="chevron-back" size={24} color="#0D1B3E" />
     </TouchableOpacity>
   );
 
-  // ── PASO 1: DATOS BÁSICOS ────────────────────────────────
+  //ITEM DE RESUMEN 
+  const ResumenItem = ({ icon, color = '#1D9E75', text }) => (
+    <View style={styles.resumenRow}>
+      <Ionicons name={icon} size={18} color={color} />
+      <Text style={styles.resumenItem}>{text}</Text>
+    </View>
+  );
+
+  //CAMPO DE FOTO DE PERFIL (ambos) 
+  const CampoFoto = () => (
+    <>
+      <Text style={styles.label}>Foto de perfil</Text>
+      <TouchableOpacity style={styles.fotoWrap} onPress={seleccionarFoto} activeOpacity={0.85}>
+        {fotoPerfil ? (
+          <Image source={{ uri: fotoPerfil }} style={styles.fotoPreview} />
+        ) : (
+          <View style={styles.fotoPlaceholder}>
+            <Ionicons name="camera-outline" size={26} color="#0D1B3E" />
+            <Text style={styles.fotoPlaceholderText}>Agregar foto</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+      <Text style={styles.hint}>Opcional — podrás agregarla más tarde desde tu perfil</Text>
+    </>
+  );
+
+  //PASO 1: DATOS BÁSICOS 
   const renderPaso1 = () => (
     <ScrollView style={styles.form} contentContainerStyle={{ paddingBottom: 60 }}>
       <Text style={styles.pasoTitulo}>Datos personales</Text>
-      <Text style={styles.pasoDesc}>Ingresa tu información personal. Tu cédula se verificará en el siguiente paso.</Text>
+      <Text style={styles.pasoDesc}>
+        {tipo === 'conductor'
+          ? 'Ingresa tu información personal. Tu cédula se verificará en el siguiente paso.'
+          : 'Ingresa tu información personal para crear tu cuenta.'}
+      </Text>
 
       <Text style={styles.label}>Nombre *</Text>
       <TextInput style={styles.input} placeholder="Tu nombre" placeholderTextColor="#aaa" value={nombre} onChangeText={setNombre} />
@@ -387,8 +489,26 @@ export default function RegisterScreen({ navigation, route }) {
         </>
       )}
 
+      {/* El padre ingresa su cédula directamente, sin OCR */}
+      {tipo === 'padre' && (
+        <>
+          <Text style={styles.label}>Cédula *</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="8-123-456"
+            placeholderTextColor="#aaa"
+            value={cedula}
+            onChangeText={setCedula}
+            autoCapitalize="characters"
+          />
+          <Text style={styles.hint}>Formato: 8-123-456, E-8-123456 o PE-1234-123456</Text>
+        </>
+      )}
+
+      <CampoFoto />
+
       <TouchableOpacity
-        style={styles.btnNext}
+        style={[styles.btnNext, styles.btnNextSolo]}
         onPress={() => { if (validarPaso1()) setPaso(2); }}
       >
         <Text style={styles.btnNextText}>Continuar →</Text>
@@ -396,7 +516,40 @@ export default function RegisterScreen({ navigation, route }) {
     </ScrollView>
   );
 
-  // ── PASO 2: OCR CÉDULA ───────────────────────────────────
+  //PASO 2 (PADRE): RESUMEN Y CREAR CUENTA 
+  const renderResumenPadre = () => (
+    <ScrollView style={styles.form} contentContainerStyle={{ paddingBottom: 60 }}>
+      <Text style={styles.pasoTitulo}>¡Todo listo!</Text>
+      <Text style={styles.pasoDesc}>Revisa tus datos y crea tu cuenta. Podrás agregar a tus hijos después de iniciar sesión.</Text>
+
+      <View style={styles.resumenCard}>
+        <ResumenItem icon="checkmark-circle" text={`Nombre: ${nombre} ${apellido}`} />
+        <ResumenItem icon="checkmark-circle" text={`Correo: ${correo}`} />
+        <ResumenItem icon="checkmark-circle" text={`Cédula: ${cedula}`} />
+        {fotoPerfil ? (
+          <ResumenItem icon="checkmark-circle" text="Foto de perfil agregada" />
+        ) : (
+          <ResumenItem icon="camera-outline" color="#aaa" text="Sin foto de perfil (opcional)" />
+        )}
+      </View>
+
+      <View style={styles.botonesNav}>
+        <BotonAtras onPress={() => setPaso(1)} />
+        <TouchableOpacity
+          style={[styles.btnNext, { flex: 1 }, cargando && styles.btnDisabled]}
+          onPress={handleRegister}
+          disabled={cargando}
+        >
+          {cargando
+            ? <ActivityIndicator color="#0D1B3E" />
+            : <Text style={styles.btnNextText}>Crear cuenta</Text>
+          }
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
+
+  //PASO 2 (CONDUCTOR): OCR CÉDULA
   const renderPaso2 = () => (
     <ScrollView style={styles.form} contentContainerStyle={{ paddingBottom: 60 }}>
       <Text style={styles.pasoTitulo}>Verificación de cédula</Text>
@@ -404,18 +557,20 @@ export default function RegisterScreen({ navigation, route }) {
 
       <View style={styles.ocrCard}>
         <View style={styles.ocrIconCircle}>
-          <Text style={styles.ocrIcon}>🪪</Text>
+          <Ionicons name="card-outline" size={32} color="#0D1B3E" />
         </View>
         <Text style={styles.ocrTitle}>Cédula de identidad</Text>
         <Text style={styles.ocrDesc}>Asegúrate de tener buena iluminación y que la cédula esté enfocada y completa en la pantalla</Text>
 
         {cedulaOcrValidada ? (
           <View style={styles.validadoBadge}>
-            <Text style={styles.validadoText}>✅ Cédula verificada — {cedula}</Text>
+            <Ionicons name="checkmark-circle" size={16} color="#0F6E56" />
+            <Text style={styles.validadoText}>Cédula verificada — {cedula}</Text>
           </View>
         ) : (
           <TouchableOpacity style={styles.btnOcr} onPress={() => escanearDocumento('cedula')}>
-            <Text style={styles.btnOcrText}>📷 Escanear cédula</Text>
+            <Ionicons name="camera-outline" size={18} color="#fff" />
+            <Text style={styles.btnOcrText}>Escanear cédula</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -435,73 +590,39 @@ export default function RegisterScreen({ navigation, route }) {
     </ScrollView>
   );
 
-  // ── PASO 3: OCR LICENCIA o FACIAL ───────────────────────
+  //PASO 3 (CONDUCTOR): OCR LICENCIA 
   const renderPaso3 = () => (
     <ScrollView style={styles.form} contentContainerStyle={{ paddingBottom: 60 }}>
-      {tipo === 'conductor' ? (
-        <>
-          <Text style={styles.pasoTitulo}>Verificación de licencia</Text>
-          <Text style={styles.pasoDesc}>La ATTT exige licencia con letra E1, E2 o E3 para conducir buses escolares en Panamá</Text>
+      <Text style={styles.pasoTitulo}>Verificación de licencia</Text>
+      <Text style={styles.pasoDesc}>La ATTT exige licencia con letra E1, E2 o E3 para conducir buses escolares en Panamá</Text>
 
-          <View style={styles.ocrCard}>
-            <View style={styles.ocrIconCircle}>
-              <Text style={styles.ocrIcon}>🪪</Text>
-            </View>
-            <Text style={styles.ocrTitle}>Licencia de conducir</Text>
-            <Text style={styles.ocrDesc}>El sistema verificará que tu licencia tenga letra E1, E2 o E3 y que coincida con tu cédula</Text>
+      <View style={styles.ocrCard}>
+        <View style={styles.ocrIconCircle}>
+          <Ionicons name="document-text-outline" size={32} color="#0D1B3E" />
+        </View>
+        <Text style={styles.ocrTitle}>Licencia de conducir</Text>
+        <Text style={styles.ocrDesc}>El sistema verificará que tu licencia tenga letra E1, E2 o E3 y que coincida con tu cédula</Text>
 
-            {licenciaOcrValidada ? (
-              <View style={styles.validadoBadge}>
-                <Text style={styles.validadoText}>✅ Licencia verificada — letra {letraLicencia}</Text>
-              </View>
-            ) : (
-              <TouchableOpacity style={styles.btnOcr} onPress={() => escanearDocumento('licencia')}>
-                <Text style={styles.btnOcrText}>📷 Escanear licencia</Text>
-              </TouchableOpacity>
-            )}
+        {licenciaOcrValidada ? (
+          <View style={styles.validadoBadge}>
+            <Ionicons name="checkmark-circle" size={16} color="#0F6E56" />
+            <Text style={styles.validadoText}>Licencia verificada — letra {letraLicencia}</Text>
           </View>
-        </>
-      ) : (
-        <>
-          <Text style={styles.pasoTitulo}>Verificación de identidad</Text>
-          <Text style={styles.pasoDesc}>Necesitamos verificar tu identidad mediante reconocimiento facial</Text>
-
-          <View style={styles.ocrCard}>
-            <View style={styles.ocrIconCircle}>
-              <Text style={styles.ocrIcon}>🤳</Text>
-            </View>
-            <Text style={styles.ocrTitle}>Reconocimiento facial</Text>
-            <Text style={styles.ocrDesc}>Colócate en un lugar bien iluminado y mira directamente a la cámara frontal</Text>
-
-            {facialVerificado ? (
-              <View style={styles.validadoBadge}>
-                <Text style={styles.validadoText}>✅ Identidad verificada</Text>
-              </View>
-            ) : (
-              <TouchableOpacity style={styles.btnOcr} onPress={verificarRostro}>
-                <Text style={styles.btnOcrText}>🤳 Verificar identidad</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </>
-      )}
+        ) : (
+          <TouchableOpacity style={styles.btnOcr} onPress={() => escanearDocumento('licencia')}>
+            <Ionicons name="camera-outline" size={18} color="#fff" />
+            <Text style={styles.btnOcrText}>Escanear licencia</Text>
+          </TouchableOpacity>
+        )}
+      </View>
 
       <View style={styles.botonesNav}>
         <BotonAtras onPress={() => setPaso(2)} />
         <TouchableOpacity
-          style={[
-            styles.btnNext, { flex: 1 },
-            !(tipo === 'conductor' ? licenciaOcrValidada : facialVerificado) && styles.btnDisabled
-          ]}
+          style={[styles.btnNext, { flex: 1 }, !licenciaOcrValidada && styles.btnDisabled]}
           onPress={() => {
-            const validado = tipo === 'conductor' ? licenciaOcrValidada : facialVerificado;
-            if (validado) setPaso(4);
-            else Alert.alert(
-              'Requerido',
-              tipo === 'conductor'
-                ? 'Debes escanear tu licencia para continuar'
-                : 'Debes verificar tu identidad para continuar'
-            );
+            if (licenciaOcrValidada) setPaso(4);
+            else Alert.alert('Requerido', 'Debes escanear tu licencia para continuar');
           }}
         >
           <Text style={styles.btnNextText}>Continuar →</Text>
@@ -510,118 +631,99 @@ export default function RegisterScreen({ navigation, route }) {
     </ScrollView>
   );
 
-  // ── PASO 4: VEHÍCULO (conductor) o RESUMEN (padre) ──────
+  //PASO 4 (CONDUCTOR): VEHÍCULO + ATTT 
   const renderPaso4 = () => (
     <ScrollView style={styles.form} contentContainerStyle={{ paddingBottom: 60 }}>
-      {tipo === 'conductor' ? (
-        <>
-          <Text style={styles.pasoTitulo}>Datos del bus</Text>
-          <Text style={styles.pasoDesc}>Esta información será verificada por el sistema según los registros de la ATTT</Text>
+      <Text style={styles.pasoTitulo}>Datos del bus</Text>
+      <Text style={styles.pasoDesc}>Esta información será verificada por el sistema según los registros de la ATTT</Text>
 
-          <Text style={styles.label}>Placa *</Text>
-          <TextInput style={styles.input} placeholder="BC-1234" placeholderTextColor="#aaa" value={placa} onChangeText={setPlaca} autoCapitalize="characters" />
+      <Text style={styles.label}>Placa *</Text>
+      <TextInput style={styles.input} placeholder="BC-1234" placeholderTextColor="#aaa" value={placa} onChangeText={setPlaca} autoCapitalize="characters" />
 
-          <Text style={styles.label}>Marca *</Text>
-          <TextInput style={styles.input} placeholder="Toyota" placeholderTextColor="#aaa" value={marca} onChangeText={setMarca} />
+      <Text style={styles.label}>Marca *</Text>
+      <TextInput style={styles.input} placeholder="Toyota" placeholderTextColor="#aaa" value={marca} onChangeText={setMarca} />
 
-          <Text style={styles.label}>Modelo *</Text>
-          <TextInput style={styles.input} placeholder="Coaster" placeholderTextColor="#aaa" value={modelo} onChangeText={setModelo} />
+      <Text style={styles.label}>Modelo *</Text>
+      <TextInput style={styles.input} placeholder="Coaster" placeholderTextColor="#aaa" value={modelo} onChangeText={setModelo} />
 
-          <Text style={styles.label}>Año *</Text>
-          <TextInput style={styles.input} placeholder="2018" placeholderTextColor="#aaa" value={anio} onChangeText={setAnio} keyboardType="numeric" maxLength={4} />
+      <Text style={styles.label}>Año *</Text>
+      <TextInput style={styles.input} placeholder="2018" placeholderTextColor="#aaa" value={anio} onChangeText={setAnio} keyboardType="numeric" maxLength={4} />
 
-          <Text style={styles.label}>Número de asientos *</Text>
-          <TextInput style={styles.input} placeholder="20" placeholderTextColor="#aaa" value={numAsientos} onChangeText={setNumAsientos} keyboardType="numeric" />
+      <Text style={styles.label}>Número de asientos *</Text>
+      <TextInput style={styles.input} placeholder="20" placeholderTextColor="#aaa" value={numAsientos} onChangeText={setNumAsientos} keyboardType="numeric" />
 
-          {/* Simulación ATTT */}
-          {verificandoATTT || estadoATTT ? (
-            <View style={styles.atttCard}>
-              <Text style={styles.atttTitulo}>Verificación ATTT</Text>
+      {/* Simulación ATTT */}
+      {verificandoATTT || estadoATTT ? (
+        <View style={styles.atttCard}>
+          <Text style={styles.atttTitulo}>Verificación ATTT</Text>
 
-              <View style={styles.atttEstado}>
-                <View style={[styles.atttDot, estadoATTT === 'pendiente' || estadoATTT === 'en_revision' || estadoATTT === 'aprobado' ? styles.dotActivo : styles.dotInactivo]} />
-                <Text style={[styles.atttTexto, estadoATTT === 'pendiente' && styles.atttTextoActivo]}>Pendiente</Text>
-                {estadoATTT === 'pendiente' && <ActivityIndicator size="small" color="#FFD700" style={{ marginLeft: 8 }} />}
-              </View>
-
-              <View style={styles.atttLinea} />
-
-              <View style={styles.atttEstado}>
-                <View style={[styles.atttDot, estadoATTT === 'en_revision' || estadoATTT === 'aprobado' ? styles.dotActivo : styles.dotInactivo]} />
-                <Text style={[styles.atttTexto, estadoATTT === 'en_revision' && styles.atttTextoActivo]}>En revisión</Text>
-                {estadoATTT === 'en_revision' && <ActivityIndicator size="small" color="#FFD700" style={{ marginLeft: 8 }} />}
-              </View>
-
-              <View style={styles.atttLinea} />
-
-              <View style={styles.atttEstado}>
-                <View style={[styles.atttDot, estadoATTT === 'aprobado' ? styles.dotAprobado : styles.dotInactivo]} />
-                <Text style={[styles.atttTexto, estadoATTT === 'aprobado' && styles.atttTextoAprobado]}>
-                  {estadoATTT === 'aprobado' ? '✅ Aprobado' : 'Aprobado'}
-                </Text>
-              </View>
-            </View>
-          ) : null}
-        </>
-      ) : (
-        <>
-          <Text style={styles.pasoTitulo}>¡Todo listo!</Text>
-          <Text style={styles.pasoDesc}>Tu cuenta está lista para ser creada. Podrás agregar a tus hijos después de iniciar sesión.</Text>
-
-          <View style={styles.resumenCard}>
-            <Text style={styles.resumenItem}>✅ Datos personales</Text>
-            <Text style={styles.resumenItem}>✅ Cédula verificada — {cedula}</Text>
-            <Text style={styles.resumenItem}>✅ Identidad verificada</Text>
-            <Text style={styles.resumenItem}>💳 Tarjeta — se registra al contratar servicio</Text>
+          <View style={styles.atttEstado}>
+            <View style={[styles.atttDot, estadoATTT === 'pendiente' || estadoATTT === 'en_revision' || estadoATTT === 'aprobado' ? styles.dotActivo : styles.dotInactivo]} />
+            <Text style={[styles.atttTexto, estadoATTT === 'pendiente' && styles.atttTextoActivo]}>Pendiente</Text>
+            {estadoATTT === 'pendiente' && <ActivityIndicator size="small" color="#FFD700" style={{ marginLeft: 8 }} />}
           </View>
-        </>
-      )}
+
+          <View style={styles.atttLinea} />
+
+          <View style={styles.atttEstado}>
+            <View style={[styles.atttDot, estadoATTT === 'en_revision' || estadoATTT === 'aprobado' ? styles.dotActivo : styles.dotInactivo]} />
+            <Text style={[styles.atttTexto, estadoATTT === 'en_revision' && styles.atttTextoActivo]}>En revisión</Text>
+            {estadoATTT === 'en_revision' && <ActivityIndicator size="small" color="#FFD700" style={{ marginLeft: 8 }} />}
+          </View>
+
+          <View style={styles.atttLinea} />
+
+          <View style={styles.atttEstado}>
+            <View style={[styles.atttDot, estadoATTT === 'aprobado' ? styles.dotAprobado : styles.dotInactivo]} />
+            {estadoATTT === 'aprobado' ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="checkmark-circle" size={16} color="#1D9E75" />
+                <Text style={styles.atttTextoAprobado}>Aprobado</Text>
+              </View>
+            ) : (
+              <Text style={styles.atttTexto}>Aprobado</Text>
+            )}
+          </View>
+        </View>
+      ) : null}
 
       <View style={styles.botonesNav}>
         <BotonAtras onPress={() => setPaso(3)} />
-        {tipo === 'conductor' ? (
-          <TouchableOpacity
-            style={[styles.btnNext, { flex: 1 }, verificandoATTT && styles.btnDisabled]}
-            onPress={simularVerificacionATTT}
-            disabled={verificandoATTT}
-          >
-            {verificandoATTT
-              ? <ActivityIndicator color="#0D1B3E" />
-              : <Text style={styles.btnNextText}>Verificar con ATTT →</Text>
-            }
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={[styles.btnNext, { flex: 1 }, cargando && styles.btnDisabled]}
-            onPress={handleRegister}
-            disabled={cargando}
-          >
-            {cargando
-              ? <ActivityIndicator color="#0D1B3E" />
-              : <Text style={styles.btnNextText}>Crear cuenta</Text>
-            }
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={[styles.btnNext, { flex: 1 }, verificandoATTT && styles.btnDisabled]}
+          onPress={simularVerificacionATTT}
+          disabled={verificandoATTT}
+        >
+          {verificandoATTT
+            ? <ActivityIndicator color="#0D1B3E" />
+            : <Text style={styles.btnNextText}>Verificar con ATTT →</Text>
+          }
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
 
-  // ── PASO 5: CONFIRMACIÓN FINAL (solo conductor) ──────────
+  //PASO 5 (CONDUCTOR): CONFIRMACIÓN FINAL 
   const renderPaso5 = () => (
     <ScrollView style={styles.form} contentContainerStyle={{ paddingBottom: 60 }}>
       <Text style={styles.pasoTitulo}>¡Todo verificado!</Text>
       <Text style={styles.pasoDesc}>Tus datos fueron aprobados por la ATTT. Tu cuenta está lista.</Text>
 
       <View style={styles.resumenCard}>
-        <Text style={styles.resumenItem}>✅ Datos personales</Text>
-        <Text style={styles.resumenItem}>✅ Cédula verificada — {cedula}</Text>
-        <Text style={styles.resumenItem}>✅ Licencia letra {letraLicencia}</Text>
-        <Text style={styles.resumenItem}>✅ Bus registrado — {placa}</Text>
-        <Text style={styles.resumenItem}>✅ Verificación ATTT aprobada</Text>
+        <ResumenItem icon="checkmark-circle" text="Datos personales" />
+        <ResumenItem icon="checkmark-circle" text={`Cédula verificada — ${cedula}`} />
+        <ResumenItem icon="checkmark-circle" text={`Licencia letra ${letraLicencia}`} />
+        <ResumenItem icon="checkmark-circle" text={`Bus registrado — ${placa}`} />
+        <ResumenItem icon="checkmark-circle" text="Verificación ATTT aprobada" />
+        {fotoPerfil ? (
+          <ResumenItem icon="checkmark-circle" text="Foto de perfil agregada" />
+        ) : (
+          <ResumenItem icon="camera-outline" color="#aaa" text="Sin foto de perfil (opcional)" />
+        )}
       </View>
 
       <TouchableOpacity
-        style={[styles.btnNext, { marginTop: 24 }, cargando && styles.btnDisabled]}
+        style={[styles.btnNext, styles.btnNextSolo, cargando && styles.btnDisabled]}
         onPress={handleRegister}
         disabled={cargando}
       >
@@ -632,6 +734,21 @@ export default function RegisterScreen({ navigation, route }) {
       </TouchableOpacity>
     </ScrollView>
   );
+
+  // RENDER DEL CONTENIDO SEGÚN TIPO Y PASO 
+  const renderContenido = () => {
+    if (tipo === 'padre') {
+      if (paso === 1) return renderPaso1();
+      if (paso === 2) return renderResumenPadre();
+    } else {
+      if (paso === 1) return renderPaso1();
+      if (paso === 2) return renderPaso2();
+      if (paso === 3) return renderPaso3();
+      if (paso === 4) return renderPaso4();
+      if (paso === 5) return renderPaso5();
+    }
+    return null;
+  };
 
   return (
     <KeyboardAvoidingView
@@ -644,7 +761,7 @@ export default function RegisterScreen({ navigation, route }) {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <TouchableOpacity style={styles.btnVolver} onPress={() => navigation.goBack()}>
-            <Text style={styles.btnVolverArrow}>‹</Text>
+            <Ionicons name="chevron-back" size={24} color="#fff" />
           </TouchableOpacity>
           <Text style={styles.pasoLabel}>Paso {paso} de {totalPasos}</Text>
         </View>
@@ -662,11 +779,7 @@ export default function RegisterScreen({ navigation, route }) {
 
       {/* Card blanca con el contenido del paso */}
       <View style={styles.card}>
-        {paso === 1 && renderPaso1()}
-        {paso === 2 && renderPaso2()}
-        {paso === 3 && renderPaso3()}
-        {paso === 4 && renderPaso4()}
-        {paso === 5 && renderPaso5()}
+        {renderContenido()}
       </View>
     </KeyboardAvoidingView>
   );
@@ -696,12 +809,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  btnVolverArrow: {
-    color: '#fff',
-    fontSize: 26,
-    fontWeight: '600',
-    marginTop: -2,
-  },
   headerTitle: { color: '#fff', fontSize: 22, fontWeight: 'bold', marginBottom: 14 },
   pasos: { flexDirection: 'row', gap: 6 },
   pasoBar: { flex: 1, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.15)' },
@@ -727,13 +834,40 @@ const styles = StyleSheet.create({
     fontSize: 15, backgroundColor: '#f9fafb', color: '#0D1B3E',
   },
 
+  // Foto de perfil
+  fotoWrap: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    marginTop: 4,
+    overflow: 'hidden',
+  },
+  fotoPreview: {
+    width: '100%',
+    height: '100%',
+  },
+  fotoPlaceholder: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 48,
+    backgroundColor: '#F5F8FC',
+    borderWidth: 1.5,
+    borderColor: '#E3ECF7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  fotoPlaceholderText: { fontSize: 11, color: '#0D1B3E', fontWeight: '600' },
+
   // Botones de navegación
   btnNext: {
     backgroundColor: '#FFD700', borderRadius: 14,
-    paddingVertical: 16, alignItems: 'center', marginTop: 28,
+    paddingVertical: 16, alignItems: 'center',
     shadowColor: '#FFD700', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
   },
+  // Solo para cuando btnNext va SOLO (no dentro de botonesNav)
+  btnNextSolo: { marginTop: 28 },
   btnNextText: { color: '#0D1B3E', fontSize: 16, fontWeight: 'bold' },
   btnDisabled: { opacity: 0.4, shadowOpacity: 0 },
   botonesNav: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 28, marginBottom: 40 },
@@ -742,7 +876,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F8FC', borderWidth: 1.5, borderColor: '#E3ECF7',
     alignItems: 'center', justifyContent: 'center',
   },
-  btnAtrasArrow: { color: '#0D1B3E', fontSize: 28, fontWeight: '600', marginTop: -2 },
 
   // OCR Card
   ocrCard: {
@@ -757,15 +890,16 @@ const styles = StyleSheet.create({
     shadowColor: '#0D1B3E', shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06, shadowRadius: 6, elevation: 2,
   },
-  ocrIcon: { fontSize: 32 },
   ocrTitle: { fontSize: 18, fontWeight: 'bold', color: '#0D1B3E', marginBottom: 8 },
   ocrDesc: { fontSize: 14, color: '#888', textAlign: 'center', lineHeight: 20 },
   btnOcr: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: '#0D1B3E', borderRadius: 14,
     paddingVertical: 14, paddingHorizontal: 28, marginTop: 20,
   },
   btnOcrText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
   validadoBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: '#E1F5EE', borderRadius: 20,
     paddingVertical: 10, paddingHorizontal: 20, marginTop: 20,
   },
@@ -777,7 +911,8 @@ const styles = StyleSheet.create({
     padding: 24, marginTop: 16, gap: 14,
     borderWidth: 1.5, borderColor: '#E3ECF7',
   },
-  resumenItem: { fontSize: 15, color: '#333' },
+  resumenRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  resumenItem: { fontSize: 15, color: '#333', flexShrink: 1 },
 
   // ATTT
   atttCard: {
@@ -803,16 +938,25 @@ const styles = StyleSheet.create({
     flex: 1, alignItems: 'center',
     justifyContent: 'space-between', padding: 40,
   },
+  cameraTitleWrap: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingVertical: 12, paddingHorizontal: 16, borderRadius: 10,
+  },
   cameraTitle: {
     color: '#fff', fontSize: 18, fontWeight: 'bold',
-    textAlign: 'center', backgroundColor: 'rgba(0,0,0,0.5)',
-    padding: 12, borderRadius: 10,
+    textAlign: 'center',
   },
   cameraFrame: {
     width: 280, height: 180,
     borderWidth: 2, borderColor: '#FFD700', borderRadius: 12,
   },
+  cameraFrameRedonda: {
+    width: 240, height: 240,
+    borderWidth: 2, borderColor: '#FFD700', borderRadius: 120,
+  },
   btnCapturar: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: '#FFD700', borderRadius: 50,
     paddingVertical: 16, paddingHorizontal: 40,
     shadowColor: '#FFD700', shadowOffset: { width: 0, height: 4 },

@@ -1,35 +1,96 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, TextInput,
-  StyleSheet, StatusBar, ScrollView, Modal, Alert
+  StyleSheet, StatusBar, ScrollView, Modal, Alert,
+  Image, ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import QRCode from 'react-native-qrcode-svg';
+import { auth } from '../config/firebase';
+import api from '../config/api';
 
 export default function HijosQRScreen({ navigation, route }) {
-  const { usuario } = route.params;
 
-  // Estado local de hijos (luego vendrá del backend)
-  const [hijos, setHijos] = useState(usuario.datos_padre?.hijos || []);
+  const [hijos, setHijos] = useState([]);
+  const [cargandoLista, setCargandoLista] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [nombreHijo, setNombreHijo] = useState('');
+  const [guardando, setGuardando] = useState(false);
 
-  const agregarHijo = () => {
+  //CARGAR HIJOS DEL PADRE
+  const cargarHijos = async () => {
+    try {
+      setCargandoLista(true);
+      const token = await auth.currentUser.getIdToken();
+      const response = await api.get('/api/padre/mis-hijos', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setHijos(response.data.hijos || []);
+    } catch (error) {
+      console.error('Error al cargar hijos:', error);
+      Alert.alert('Error', 'No pudimos cargar la lista de tus hijos');
+    } finally {
+      setCargandoLista(false);
+    }
+  };
+
+  useEffect(() => {
+    cargarHijos();
+  }, []);
+
+  //AGREGAR HIJO
+  const agregarHijo = async () => {
     if (!nombreHijo.trim()) {
       Alert.alert('Campo requerido', 'Ingresa el nombre de tu hijo');
       return;
     }
 
-    const nuevoHijo = {
-      id: `hijo_${Date.now()}`,
-      nombre: nombreHijo.trim(),
-      qr_codigo: `BUSWAY-${usuario.firebase_uid?.slice(0, 6) || 'XXXXXX'}-${Date.now()}`,
-    };
+    try {
+      setGuardando(true);
+      const token = await auth.currentUser.getIdToken();
+      const response = await api.post(
+        '/api/padre/registrar-hijo',
+        { nombre: nombreHijo.trim() },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-    setHijos([...hijos, nuevoHijo]);
-    setNombreHijo('');
-    setModalVisible(false);
+      setHijos([...hijos, response.data.hijo]);
+      setNombreHijo('');
+      setModalVisible(false);
+    } catch (error) {
+      console.error('Error al registrar hijo:', error);
+      const mensaje = error.response?.data?.error || 'No pudimos registrar a tu hijo. Intenta de nuevo';
+      Alert.alert('Error', mensaje);
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  //ELIMINAR HIJO
+  const eliminarHijo = (hijo) => {
+    Alert.alert(
+      'Eliminar hijo',
+      `¿Seguro que quieres eliminar a ${hijo.nombre}? Esta acción no se puede deshacer.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const token = await auth.currentUser.getIdToken();
+              await api.delete(`/api/padre/hijos/${hijo._id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              setHijos(hijos.filter(h => h._id !== hijo._id));
+            } catch (error) {
+              console.error('Error al eliminar hijo:', error);
+              Alert.alert('Error', 'No pudimos eliminar a tu hijo');
+            }
+          }
+        }
+      ]
+    );
   };
 
   return (
@@ -53,7 +114,12 @@ export default function HijosQRScreen({ navigation, route }) {
       <View style={styles.card}>
         <ScrollView contentContainerStyle={styles.body} bounces={false}>
 
-          {hijos.length === 0 ? (
+          {cargandoLista ? (
+            <View style={styles.vacioWrap}>
+              <ActivityIndicator size="large" color="#0D1B3E" />
+              <Text style={[styles.vacioDesc, { marginTop: 16 }]}>Cargando tus hijos...</Text>
+            </View>
+          ) : hijos.length === 0 ? (
             <View style={styles.vacioWrap}>
               <View style={styles.vacioIconCircle}>
                 <Ionicons name="people-outline" size={32} color="#0D1B3E" />
@@ -63,7 +129,7 @@ export default function HijosQRScreen({ navigation, route }) {
             </View>
           ) : (
             hijos.map((hijo, i) => (
-              <View key={i} style={styles.hijoCard}>
+              <View key={hijo._id || i} style={styles.hijoCard}>
                 <View style={styles.hijoHeader}>
                   <View style={styles.hijoAvatar}>
                     <Text style={styles.hijoAvatarText}>{hijo.nombre.charAt(0)}</Text>
@@ -72,20 +138,30 @@ export default function HijosQRScreen({ navigation, route }) {
                 </View>
 
                 <View style={styles.qrWrap}>
-                  <QRCode
-                    value={hijo.qr_codigo}
-                    size={150}
-                    color="#0D1B3E"
-                    backgroundColor="#fff"
+                  <Image
+                    source={{ uri: hijo.qr_code }}
+                    style={{ width: 150, height: 150 }}
+                    resizeMode="contain"
                   />
                 </View>
 
-                <Text style={styles.qrCodigo}>{hijo.qr_codigo}</Text>
+                <Text style={styles.qrCodigo}>ID: {hijo._id}</Text>
 
-                <TouchableOpacity style={styles.btnDescargar} activeOpacity={0.85}>
-                  <Ionicons name="download-outline" size={16} color="#0D1B3E" />
-                  <Text style={styles.btnDescargarText}>Descargar QR</Text>
-                </TouchableOpacity>
+                <View style={styles.accionesRow}>
+                  <TouchableOpacity style={styles.btnDescargar} activeOpacity={0.85}>
+                    <Ionicons name="download-outline" size={16} color="#0D1B3E" />
+                    <Text style={styles.btnDescargarText}>Descargar QR</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.btnEliminar}
+                    activeOpacity={0.85}
+                    onPress={() => eliminarHijo(hijo)}
+                  >
+                    <Ionicons name="trash-outline" size={16} color="#E53935" />
+                    <Text style={styles.btnEliminarText}>Eliminar</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             ))
           )}
@@ -124,15 +200,24 @@ export default function HijosQRScreen({ navigation, route }) {
               placeholderTextColor="#aaa"
               value={nombreHijo}
               onChangeText={setNombreHijo}
+              editable={!guardando}
             />
 
-            <TouchableOpacity style={styles.btnConfirmar} onPress={agregarHijo}>
-              <Text style={styles.btnConfirmarText}>Generar QR</Text>
+            <TouchableOpacity
+              style={[styles.btnConfirmar, guardando && { opacity: 0.6 }]}
+              onPress={agregarHijo}
+              disabled={guardando}
+            >
+              {guardando
+                ? <ActivityIndicator color="#0D1B3E" />
+                : <Text style={styles.btnConfirmarText}>Generar QR</Text>
+              }
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.btnCancelar}
               onPress={() => { setModalVisible(false); setNombreHijo(''); }}
+              disabled={guardando}
             >
               <Text style={styles.btnCancelarText}>Cancelar</Text>
             </TouchableOpacity>
@@ -265,6 +350,12 @@ const styles = StyleSheet.create({
     color: '#aaa',
     marginBottom: 16,
   },
+
+  // Fila de acciones (Descargar / Eliminar)
+  accionesRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
   btnDescargar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -278,6 +369,22 @@ const styles = StyleSheet.create({
   },
   btnDescargarText: {
     color: '#0D1B3E',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  btnEliminar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFF5F5',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderWidth: 1.5,
+    borderColor: '#FFD1D1',
+  },
+  btnEliminarText: {
+    color: '#E53935',
     fontSize: 13,
     fontWeight: '600',
   },
