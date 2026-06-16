@@ -16,4 +16,10 @@ const usuarioSchema = new mongoose.Schema({
   datos_admin: { type: Object, default: null }
 });
 
-module.exports = mongoose.models.usuarios || mongoose.model('usuarios', usuarioSchema);
+const Usuario = mongoose.models.Usuario || mongoose.model('Usuario', usuarioSchema);
+
+if (!mongoose.models.usuarios) {
+  mongoose.model('usuarios', usuarioSchema);
+}
+
+module.exports = Usuario;

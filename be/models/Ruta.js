@@ -5,7 +5,9 @@ const RutaSchema = new mongoose.Schema({
   escuela: { type: String, required: true },
   conductor_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Usuario', required: true },
   zona: { type: String },
-  frecuencia: { type: String }
+  frecuencia: { type: String },
+  estado: { type: String, default: 'activa' },
+  puntos_trayectoria: { type: Array, default: [] }
 }, { 
   collection: 'rutas', 
   timestamps: true 

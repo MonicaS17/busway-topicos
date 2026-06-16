@@ -11,9 +11,13 @@ const ViajeSchema = new mongoose.Schema({
     ref: 'Usuario', // Hace referencia a la colección 'usuarios'
     required: true 
   },
+  padre_id: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'Usuario' // Hace referencia a la colección 'usuarios' (opcional)
+  },
   estudiantes_abordo: [{ 
     type: mongoose.Schema.Types.ObjectId, 
-    ref: 'Usuario' // IDs de hijos almacenados en Usuarios
+    ref: 'Estudiante' // IDs de estudiantes/hijos
   }],
   hora_salida: { 
     type: Date, 
@@ -26,6 +30,11 @@ const ViajeSchema = new mongoose.Schema({
     type: String, 
     enum: ['en_espera', 'activo', 'finalizado'], 
     default: 'activo' 
+  },
+  tipo_viaje: {
+    type: String,
+    enum: ['ida', 'vuelta'],
+    default: 'ida'
   },
   // Control de Asistencia QR
   asistencias: [{
