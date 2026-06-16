@@ -227,9 +227,8 @@ export default function PreviaRutaPadre({ route, navigation }) {
 
     socketClient.on('ruta:transicion_vuelta', (data) => {
       console.log('📥 Evento "ruta:transicion_vuelta" recibido para padre:', data);
-      setEstadoRuta('progreso');
-      setDatosViaje(data);
-      setTipoViaje('vuelta');
+      setEstadoRuta('espera');
+      setDatosViaje(null);
       setEstadoEstudiante('pendiente');
       setLogEventos([]);
     });
@@ -258,24 +257,15 @@ export default function PreviaRutaPadre({ route, navigation }) {
 
     socketClient.on('asistencia:actualizada', (data) => {
       console.log('Notificación de asistencia recibida para padre:', data);
-      if (data.hijo_id === hijoId) {
-        let tipoNormalizado = data.tipo;
-        if (data.tipo === 'subida' || data.tipo === 'abordado') {
-          tipoNormalizado = 'abordado';
-        } else if (data.tipo === 'bajada' || data.tipo === 'entregado') {
-          tipoNormalizado = 'entregado';
-        }
+      const idRecibido = data.hijo_id || data.estudianteId;
+      if (idRecibido) {
+        let tipoNormalizado = 'pendiente';
+        if (data.tipo === 'subida' || data.tipo === 'abordado') tipoNormalizado = 'abordado';
+        if (data.tipo === 'bajada' || data.tipo === 'entregado') tipoNormalizado = 'entregado';
+        if (data.tipo === 'ausente') tipoNormalizado = 'ausente';
+
         setEstadoEstudiante(tipoNormalizado);
-        
-        setLogEventos((prev) => {
-          const isDuplicate = prev.some(
-            (log) => log.hijo_id === data.hijo_id && 
-                     log.tipo === data.tipo &&
-                     Math.abs(new Date(log.fecha_hora) - new Date(data.fecha_hora)) < 2000
-          );
-          if (isDuplicate) return prev;
-          return [data, ...prev];
-        });
+        setLogEventos(prev => [data, ...prev]);
       }
     });
 
@@ -316,9 +306,9 @@ export default function PreviaRutaPadre({ route, navigation }) {
     const isIda = tipoViaje === 'ida';
     
     let currentStep = 0;
-    if (estadoEstudiante === 'abordado' || estadoEstudiante === 'subida') {
+    if (estadoEstudiante === 'abordado') {
       currentStep = 1;
-    } else if (estadoEstudiante === 'entregado' || estadoEstudiante === 'bajada') {
+    } else if (estadoEstudiante === 'entregado') {
       currentStep = 2;
     }
 
@@ -530,7 +520,7 @@ export default function PreviaRutaPadre({ route, navigation }) {
                 onPress={() => {
                   setDatosViaje(null);
                   setEstadoRuta('espera');
-                  setTipoViaje('ida');
+                  setEstadoEstudiante('pendiente');
                   setLogEventos([]);
                 }}
               >
