@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TouchableOpacity, Pressable,
+  View, Text, TouchableOpacity,
   StyleSheet, StatusBar, Alert, ScrollView,
   Modal, TextInput, ActivityIndicator
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 // ─── Datos de demostración ────────────────────────────────────────────────────
@@ -35,8 +35,7 @@ const formatExp = (val) => {
 
 // ─── Componente Principal ─────────────────────────────────────────────────────
 export default function PaymentsScreen({ navigation, route }) {
-  const { usuario } = route.params;
-  const insets = useSafeAreaInsets();
+  const { usuario } = route.params || {};
   
   // Determinar el rol de forma estricta según los datos del usuario logueado
   const esConductor = usuario?.tipo === 'conductor';
@@ -45,13 +44,13 @@ export default function PaymentsScreen({ navigation, route }) {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor="#0D1B3E" />
 
-      {/* Header Limpio sin Selector de Rol */}
+      {/* Header Limpio con botón de regreso */}
       <View style={styles.header}>
         <View style={styles.headerRow}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
             <Ionicons name="arrow-back-outline" size={22} color="#fff" />
           </TouchableOpacity>
-          <View>
+          <View style={styles.headerTitleContainer}>
             <Text style={styles.headerSub}>BusWay</Text>
             <Text style={styles.headerTitle}>Pagos</Text>
           </View>
@@ -62,35 +61,6 @@ export default function PaymentsScreen({ navigation, route }) {
       {/* Contenido Dinámico según el Tipo de Usuario */}
       <View style={styles.card}>
         {esConductor ? <VistaConductor /> : <VistaPadre />}
-      </View>
-
-      {/* Tab bar */}
-      <View style={[styles.tabBar, { paddingBottom: insets.bottom + 10 }]}>
-        {[
-          { icon: 'home-outline',          label: 'Inicio' },
-          { icon: 'storefront-outline',    label: 'Marketplace' },
-          { icon: 'card-outline',          label: 'Pagos', active: true },
-          { icon: 'log-out-outline',       label: 'Salir', isLogout: true },
-        ].map((tab, i) => (
-          <Pressable
-            key={i}
-            style={styles.tab}
-            onPress={tab.isLogout
-              ? () => navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] })
-              : tab.onPress}
-          >
-            {({ pressed }) => (
-              <>
-                <View style={tab.active || (tab.isLogout && pressed) ? styles.tabIconWrapActive : styles.tabIconWrap}>
-                  <Ionicons name={tab.icon} size={20} color={tab.active || (tab.isLogout && pressed) ? '#0D1B3E' : '#aaa'} />
-                </View>
-                <Text style={tab.active || (tab.isLogout && pressed) ? styles.tabLabelActive : styles.tabLabel}>
-                  {tab.label}
-                </Text>
-              </>
-            )}
-          </Pressable>
-        ))}
       </View>
     </SafeAreaView>
   );
@@ -108,7 +78,7 @@ function VistaPadre() {
   return (
     <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
 
-      {/* RF-29: Alerta de configuración de pago */}
+      {/* Alerta de configuración de pago */}
       {!tarjetaRegistrada && (
         <TouchableOpacity
           style={styles.alertaPago}
@@ -128,7 +98,7 @@ function VistaPadre() {
         </TouchableOpacity>
       )}
 
-      {/* RF-32/33: Contrato activo y desglose */}
+      {/* Contrato activo y desglose */}
       {tarjetaRegistrada && (
         <>
           <View style={styles.contratoCard}>
@@ -190,24 +160,28 @@ function VistaPadre() {
         </>
       )}
 
-      {/* RF-37: Historial de pagos */}
+      {/* Historial de pagos */}
       <Text style={[styles.sectionTitle, { marginTop: tarjetaRegistrada ? 24 : 20 }]}>
         Historial de pagos
       </Text>
 
+      {/* Filtro de fechas */}
       <View style={styles.filtroFechas}>
         <View style={styles.filtroFechaBox}>
-          <Ionicons name="calendar-outline" size={13} color="#888" />
+          <Ionicons name="calendar-outline" size={12} color="#888" />
           <Text style={styles.filtroFechaLabel}>Desde</Text>
           <Text style={styles.filtroFechaValor}>{filtroDesde}</Text>
         </View>
-        <Ionicons name="arrow-forward-outline" size={14} color="#aaa" />
+
+        <Ionicons name="arrow-forward-outline" size={12} color="#aaa" />
+
         <View style={styles.filtroFechaBox}>
-          <Ionicons name="calendar-outline" size={13} color="#888" />
+          <Ionicons name="calendar-outline" size={12} color="#888" />
           <Text style={styles.filtroFechaLabel}>Hasta</Text>
           <Text style={styles.filtroFechaValor}>{filtroHasta}</Text>
         </View>
-        <TouchableOpacity style={styles.filtroBtnAplicar}>
+
+        <TouchableOpacity style={styles.filtroBtnAplicar} activeOpacity={0.85}>
           <Text style={styles.filtroBtnAplicarText}>Filtrar</Text>
         </TouchableOpacity>
       </View>
@@ -533,11 +507,6 @@ function VistaConductor() {
         ))}
       </ScrollView>
 
-      <Text style={styles.sectionSub}>
-        {historialFiltrado.length} registro{historialFiltrado.length !== 1 ? 's' : ''}
-        {rutaActiva !== 'Todas las rutas' ? ` · ${rutaActiva}` : ''}
-      </Text>
-
       {historialFiltrado.map(pago => (
         <View key={pago.id} style={styles.cobroCard}>
           <View style={styles.cobroAvatarCircle}>
@@ -563,27 +532,20 @@ function VistaConductor() {
           </View>
         </View>
       ))}
-
-      {historialFiltrado.length === 0 && (
-        <View style={styles.emptyHistorial}>
-          <Ionicons name="bar-chart-outline" size={36} color="#ccc" />
-          <Text style={styles.emptyHistorialTitle}>Sin registros</Text>
-          <Text style={styles.emptyHistorialDesc}>No hay cobros para esta ruta aún.</Text>
-        </View>
-      )}
     </ScrollView>
   );
 }
 
-// ─── Estilos ──────────────────────────────────────────────────────────────────
+// ─── Estilos Consolidados ─────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0D1B3E' },
-
-  // Header
+  container: { 
+    flex: 1, 
+    backgroundColor: '#0D1B3E' 
+  },
   header: {
     backgroundColor: '#0D1B3E',
     paddingTop: 8,
-    paddingBottom: 20,
+    paddingBottom: 24,
     paddingHorizontal: '6%',
   },
   headerRow: {
@@ -592,301 +554,175 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   backBtn: {
-    width: 40, height: 40, borderRadius: 13,
+    width: 40, 
+    height: 40, 
+    borderRadius: 13,
     backgroundColor: 'rgba(255,255,255,0.12)',
-    alignItems: 'center', justifyContent: 'center',
+    alignItems: 'center', 
+    justifyContent: 'center',
   },
-  headerSub: { color: 'rgba(255,255,255,0.5)', fontSize: 12, textAlign: 'center' },
-  headerTitle: { color: '#fff', fontSize: 20, fontWeight: 'bold', textAlign: 'center' },
-
-  // Card contenedor
+  headerTitleContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerSub: { 
+    color: 'rgba(255,255,255,0.5)', 
+    fontSize: 12, 
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5
+  },
+  headerTitle: { 
+    color: '#fff', 
+    fontSize: 22, 
+    fontWeight: 'bold',
+    marginTop: 2
+  },
   card: {
-    flex: 1, backgroundColor: '#fff',
-    borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden',
+    flex: 1, 
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 28, 
+    borderTopRightRadius: 28, 
+    overflow: 'hidden',
   },
-  body: { flexGrow: 1, paddingHorizontal: '6%', paddingTop: 24, paddingBottom: 32 },
-
-  // Alerta pago (RF-29)
+  body: { 
+    flexGrow: 1, 
+    paddingHorizontal: '6%', 
+    paddingTop: 24, 
+    paddingBottom: 24 
+  },
   alertaPago: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 12,
     backgroundColor: '#FFD700',
-    borderRadius: 18, padding: 16, marginBottom: 20,
+    borderRadius: 18, 
+    padding: 16, 
+    marginBottom: 24,
   },
   alertaPagoIcono: {
-    width: 42, height: 42, borderRadius: 21,
+    width: 42, 
+    height: 42, 
+    borderRadius: 21,
     backgroundColor: 'rgba(255,255,255,0.35)',
-    alignItems: 'center', justifyContent: 'center',
+    alignItems: 'center', 
+    justifyContent: 'center',
   },
-  alertaPagoTitulo: { fontSize: 14, fontWeight: '800', color: '#0D1B3E', marginBottom: 2 },
-  alertaPagoDesc: { fontSize: 12, color: '#0D1B3E', lineHeight: 16, opacity: 0.8 },
-
-  // Contrato activo (RF-32/33)
+  alertaPagoTitulo: { fontSize: 14, fontWeight: 'bold', color: '#0D1B3E', marginBottom: 2 },
+  alertaPagoDesc: { fontSize: 12, color: '#0D1B3E', lineHeight: 16, opacity: 0.85 },
   contratoCard: {
     backgroundColor: '#F5F8FC',
-    borderRadius: 20, borderWidth: 1.5, borderColor: '#E3ECF7',
-    padding: 18, marginBottom: 12,
+    borderRadius: 18, 
+    borderWidth: 1.5, 
+    borderColor: '#E3ECF7',
+    padding: 18, 
+    marginBottom: 14,
   },
-  contratoHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
-    marginBottom: 10,
-  },
-  contratoLabel: { fontSize: 11, color: '#888', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4 },
-  contratoMes: { fontSize: 22, fontWeight: '800', color: '#0D1B3E', marginTop: 2 },
-  activoBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: '#E6F9EE', borderRadius: 20,
-    paddingVertical: 5, paddingHorizontal: 12,
-  },
-  activoDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#16A34A' },
+  contratoHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 },
+  contratoLabel: { fontSize: 11, color: '#888', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 },
+  contratoMes: { fontSize: 22, fontWeight: 'bold', color: '#0D1B3E' },
+  activoBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#E6F9EE', borderRadius: 20, paddingVertical: 4, paddingHorizontal: 12 },
+  activoDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#16A34A' },
   activoText: { fontSize: 12, fontWeight: '700', color: '#16A34A' },
-  contratoInfo: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16,
-  },
+  contratoInfo: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16 },
   contratoInfoText: { fontSize: 13, color: '#555', fontWeight: '500' },
-
-  desgloseBox: {
-    backgroundColor: '#fff', borderRadius: 14,
-    borderWidth: 1, borderColor: '#E3ECF7',
-    padding: 14, marginBottom: 12,
-  },
-  desgloseTitle: { fontSize: 11, color: '#888', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 10 },
+  desgloseBox: { backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#E3ECF7', padding: 14, marginBottom: 12 },
+  desgloseTitle: { fontSize: 11, color: '#888', fontWeight: '700', textTransform: 'uppercase', marginBottom: 10 },
   desgloseRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   desgloseConcepto: { fontSize: 13, color: '#555' },
   desgloseValor: { fontSize: 13, color: '#0D1B3E', fontWeight: '600' },
   desgloseDivider: { height: 1, backgroundColor: '#E3ECF7', marginVertical: 8 },
-  desgloseTotalLabel: { fontSize: 14, fontWeight: '800', color: '#0D1B3E' },
-  desgloseTotalValor: { fontSize: 16, fontWeight: '800', color: '#00AEEF' },
-
-  proximoCobro: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-  },
+  desgloseTotalLabel: { fontSize: 14, fontWeight: 'bold', color: '#0D1B3E' },
+  desgloseTotalValor: { fontSize: 16, fontWeight: 'bold', color: '#00AEEF' },
+  proximoCobro: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   proximoCobroText: { fontSize: 12, color: '#888' },
-
-  // Método de pago guardado
   metodoPagoCard: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#F5F8FC', borderRadius: 14,
-    borderWidth: 1.5, borderColor: '#E3ECF7',
-    padding: 14, marginBottom: 4,
+    backgroundColor: '#F5F8FC', borderRadius: 18, borderWidth: 1.5, borderColor: '#E3ECF7', padding: 16, marginBottom: 4
   },
   metodoPagoLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  metodoPagoIconCircle: {
-    width: 38, height: 38, borderRadius: 19,
-    backgroundColor: '#E8F0FE', alignItems: 'center', justifyContent: 'center',
-  },
-  metodoPagoLabel: { fontSize: 11, color: '#888', marginBottom: 2 },
-  metodoPagoNumero: { fontSize: 14, fontWeight: '700', color: '#0D1B3E', letterSpacing: 1 },
-  cambiarLink: { fontSize: 13, color: '#00AEEF', fontWeight: '600' },
-
-  // Secciones
+  metodoPagoIconCircle: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  metodoPagoLabel: { fontSize: 11, color: '#888' },
+  metodoPagoNumero: { fontSize: 14, fontWeight: '700', color: '#0D1B3E' },
+  cambiarLink: { fontSize: 13, color: '#00AEEF', fontWeight: '700' },
   sectionTitle: {
-    fontSize: 14, fontWeight: '700', color: '#0D1B3E',
-    textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0D1B3E',
+    marginBottom: 14,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  sectionSub: { fontSize: 12, color: '#888', marginBottom: 12, marginTop: -6 },
-
-  // Filtro fechas
-  filtroFechas: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    marginBottom: 16,
-  },
-  filtroFechaBox: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: '#F5F8FC', borderWidth: 1.5, borderColor: '#E3ECF7',
-    borderRadius: 12, paddingVertical: 9, paddingHorizontal: 10,
-  },
-  filtroFechaLabel: { fontSize: 10, color: '#aaa', fontWeight: '600' },
-  filtroFechaValor: { fontSize: 12, color: '#0D1B3E', fontWeight: '700' },
-  filtroBtnAplicar: {
-    backgroundColor: '#0D1B3E', borderRadius: 12,
-    paddingVertical: 10, paddingHorizontal: 14,
-  },
+  filtroFechas: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16, width: '100%' },
+  filtroFechaBox: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F5F8FC', borderWidth: 1.5, borderColor: '#E3ECF7', borderRadius: 14, paddingVertical: 10, paddingHorizontal: 8 },
+  filtroFechaLabel: { fontSize: 10, color: '#888', fontWeight: '600' },
+  filtroFechaValor: { fontSize: 11, color: '#0D1B3E', fontWeight: '700' },
+  filtroBtnAplicar: { backgroundColor: '#0D1B3E', borderRadius: 12, paddingVertical: 11, paddingHorizontal: 14 },
   filtroBtnAplicarText: { fontSize: 12, color: '#fff', fontWeight: '700' },
-
-  // Cards historial padre
-  pagoCard: {
-    backgroundColor: '#F5F8FC', borderRadius: 16,
-    borderWidth: 1.5, borderColor: '#E3ECF7',
-    padding: 14, marginBottom: 10,
-  },
+  pagoCard: { backgroundColor: '#F5F8FC', borderRadius: 18, borderWidth: 1.5, borderColor: '#E3ECF7', padding: 14, marginBottom: 10 },
   pagoCardTop: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
-  pagoMesCircle: {
-    width: 42, height: 42, borderRadius: 21,
-    backgroundColor: '#E8F0FE', alignItems: 'center', justifyContent: 'center',
-  },
+  pagoMesCircle: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
   pagoMes: { fontSize: 14, fontWeight: '700', color: '#0D1B3E' },
-  pagoFecha: { fontSize: 11, color: '#888', marginTop: 2 },
-  pagoRight: { alignItems: 'flex-end', gap: 5 },
-  pagoMonto: { fontSize: 16, fontWeight: '800', color: '#0D1B3E' },
-  exitosoBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: '#E6F9EE', borderRadius: 20,
-    paddingVertical: 3, paddingHorizontal: 8,
-  },
-  exitosoDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#16A34A' },
+  pagoFecha: { fontSize: 11, color: '#888' },
+  pagoRight: { alignItems: 'flex-end', gap: 4 },
+  pagoMonto: { fontSize: 16, fontWeight: 'bold', color: '#0D1B3E' },
+  exitosoBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#E6F9EE', borderRadius: 12, paddingVertical: 2, paddingHorizontal: 8 },
+  exitosoDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#16A34A' },
   exitosoText: { fontSize: 11, color: '#16A34A', fontWeight: '700' },
-  verReciboBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
-    backgroundColor: '#F0FAFF', borderRadius: 10,
-    borderWidth: 1, borderColor: '#D0EEFF',
-    paddingVertical: 8,
-  },
+  verReciboBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#E3ECF7', paddingVertical: 8 },
   verReciboBtnText: { fontSize: 13, color: '#00AEEF', fontWeight: '600' },
-
-  // Empty state
-  emptyHistorial: {
-    alignItems: 'center', paddingVertical: 40, gap: 8,
-  },
+  emptyHistorial: { alignItems: 'center', paddingVertical: 40, gap: 8 },
   emptyHistorialTitle: { fontSize: 15, fontWeight: '700', color: '#888' },
-  emptyHistorialDesc: { fontSize: 13, color: '#aaa', textAlign: 'center', lineHeight: 18 },
-
-  // Modal base
-  modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end',
-  },
-  modalBox: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 28, borderTopRightRadius: 28,
-    padding: 24, paddingTop: 16,
-  },
-  modalHandle: {
-    width: 40, height: 4, borderRadius: 2,
-    backgroundColor: '#E0E0E0', alignSelf: 'center', marginBottom: 20,
-  },
-  modalHeader: {
-    flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20,
-  },
-  modalIconCircle: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: '#FFF8DC', alignItems: 'center', justifyContent: 'center',
-  },
-  modalTitle: { fontSize: 17, fontWeight: '800', color: '#0D1B3E' },
-  modalSubtitle: { fontSize: 12, color: '#888', marginTop: 1 },
-  modalCloseBtn: {
-    marginLeft: 'auto', width: 36, height: 36, borderRadius: 18,
-    backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center',
-  },
-
-  // Tarjeta visual simulada
-  tarjetaVisual: {
-    backgroundColor: '#0D1B3E',
-    borderRadius: 18, padding: 20, marginBottom: 22,
-    minHeight: 130,
-  },
+  emptyHistorialDesc: { fontSize: 13, color: '#aaa', textAlign: 'center', paddingHorizontal: 10 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  modalBox: { backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24 },
+  modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#E0E0E0', alignSelf: 'center', marginBottom: 20 },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
+  modalIconCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#F5F8FC', alignItems: 'center', justifyContent: 'center' },
+  modalTitle: { fontSize: 17, fontWeight: 'bold', color: '#0D1B3E' },
+  modalSubtitle: { fontSize: 12, color: '#888' },
+  modalCloseBtn: { marginLeft: 'auto', width: 36, height: 36, borderRadius: 18, backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center' },
+  tarjetaVisual: { backgroundColor: '#0D1B3E', borderRadius: 18, padding: 20, marginBottom: 22 },
   tarjetaChip: { marginBottom: 14 },
-  tarjetaNumeroVisual: {
-    color: '#fff', fontSize: 17, fontWeight: '700',
-    letterSpacing: 3, marginBottom: 20, fontFamily: 'monospace',
-  },
+  tarjetaNumeroVisual: { color: '#fff', fontSize: 17, fontWeight: '700', letterSpacing: 1.5, marginBottom: 16 },
   tarjetaFooter: { flexDirection: 'row', justifyContent: 'space-between' },
-  tarjetaFooterLabel: { fontSize: 9, color: 'rgba(255,255,255,0.5)', letterSpacing: 1, marginBottom: 3 },
-  tarjetaFooterValor: { fontSize: 14, color: '#fff', fontWeight: '700', letterSpacing: 1 },
-
-  // Inputs modal
-  inputLabel: { fontSize: 13, fontWeight: '600', color: '#0D1B3E', marginBottom: 7 },
-  inputRow: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#F5F8FC', borderWidth: 1.5, borderColor: '#E3ECF7',
-    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, marginBottom: 14,
-  },
-  inputFlex: { flex: 1, fontSize: 15, color: '#0D1B3E' },
-
-  stripeNota: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 7,
-    backgroundColor: '#F5F8FC', borderRadius: 10, padding: 10, marginBottom: 18,
-  },
-  stripeNotaText: { flex: 1, fontSize: 11, color: '#888', lineHeight: 16 },
-
-  btnGuardar: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: '#FFD700', borderRadius: 16, paddingVertical: 15,
-  },
-  btnGuardarText: { fontSize: 15, fontWeight: '700', color: '#0D1B3E' },
-  btnDisabled: { opacity: 0.4 },
-
-  // Recibo modal
-  reciboBox: {
-    backgroundColor: '#F5F8FC', borderRadius: 14,
-    borderWidth: 1.5, borderColor: '#E3ECF7',
-    paddingHorizontal: 16, paddingVertical: 8, marginBottom: 18,
-  },
-  filaRecibo: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: '#EEF3F9',
-  },
+  tarjetaFooterLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 9 },
+  tarjetaFooterValor: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  inputLabel: { fontSize: 12, fontWeight: '700', color: '#0D1B3E', marginBottom: 6 },
+  inputRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F8FC', borderWidth: 1.5, borderColor: '#E3ECF7', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 14 },
+  inputFlex: { flex: 1, fontSize: 14, color: '#0D1B3E', fontWeight: '600' },
+  stripeNota: { flexDirection: 'row', gap: 6, marginBottom: 20 },
+  stripeNotaText: { fontSize: 11, color: '#888', flex: 1 },
+  btnGuardar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#FFD700', borderRadius: 16, paddingVertical: 14, marginTop: 10 },
+  btnGuardarText: { fontSize: 15, fontWeight: 'bold', color: '#0D1B3E' },
+  btnDisabled: { backgroundColor: '#EEF2F6', opacity: 0.6 },
+  reciboBox: { backgroundColor: '#F5F8FC', borderRadius: 18, borderWidth: 1.5, borderColor: '#E3ECF7', padding: 16, marginBottom: 20 },
+  filaRecibo: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 4 },
   filaReciboLabel: { fontSize: 13, color: '#888' },
-  filaReciboValor: { fontSize: 13, fontWeight: '600', color: '#0D1B3E' },
-  filaReciboDestacado: { fontSize: 16, fontWeight: '800', color: '#00AEEF' },
-  reciboSeparador: { height: 1, backgroundColor: '#D0D9E6', marginVertical: 4 },
-
-  // Vista conductor — métricas
-  metricasGrid: {
-    flexDirection: 'row', gap: 10, marginBottom: 10,
-  },
-  metricaCard: {
-    flex: 1, backgroundColor: '#F5F8FC', borderRadius: 16,
-    borderWidth: 1.5, borderColor: '#E3ECF7',
-    padding: 14, gap: 6,
-  },
-  metricaIconCircle: {
-    width: 36, height: 36, borderRadius: 18,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 2,
-  },
-  metricaValor: { fontSize: 18, fontWeight: '800', color: '#0D1B3E' },
-  metricaLabel: { fontSize: 10, color: '#888', fontWeight: '500', lineHeight: 14 },
-
-  notaTarifa: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 7,
-    backgroundColor: '#F5F8FC', borderRadius: 10, padding: 10,
-    marginBottom: 22, borderWidth: 1, borderColor: '#E3ECF7',
-  },
-  notaTarifaText: { flex: 1, fontSize: 11, color: '#888', lineHeight: 16 },
-
-  // Chips de filtro
-  chipsScroll: { marginBottom: 6 },
-  chipsContent: { gap: 8, paddingBottom: 4 },
-  chip: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingVertical: 8, paddingHorizontal: 14,
-    borderRadius: 20, borderWidth: 1.5, borderColor: '#E3ECF7',
-    backgroundColor: '#F5F8FC',
-  },
+  filaReciboValor: { fontSize: 13, color: '#0D1B3E', fontWeight: '600' },
+  filaReciboDestacado: { fontSize: 16, color: '#00AEEF', fontWeight: 'bold' },
+  reciboSeparador: { height: 1, backgroundColor: '#E3ECF7', marginVertical: 8 },
+  metricasGrid: { flexDirection: 'row', gap: 10, marginBottom: 14 },
+  metricaCard: { backgroundColor: '#F5F8FC', borderRadius: 18, borderWidth: 1.5, borderColor: '#E3ECF7', padding: 14, alignItems: 'flex-start' },
+  metricaIconCircle: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  metricaValor: { fontSize: 18, fontWeight: 'bold', color: '#0D1B3E', marginBottom: 2 },
+  metricaLabel: { fontSize: 10, color: '#888', fontWeight: '500', lineHeight: 12 },
+  notaTarifa: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 24 },
+  notaTarifaText: { fontSize: 12, color: '#888' },
+  chipsScroll: { marginBottom: 16, marginHorizontal: '-6%' },
+  chipsContent: { paddingHorizontal: '6%', gap: 8 },
+  chip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F8FC', borderWidth: 1.5, borderColor: '#E3ECF7', borderRadius: 20, paddingVertical: 6, paddingHorizontal: 14 },
   chipActivo: { backgroundColor: '#FFD700', borderColor: '#FFD700' },
-  chipText: { fontSize: 13, color: '#888', fontWeight: '500' },
+  chipText: { fontSize: 13, color: '#888', fontWeight: '600' },
   chipTextActivo: { color: '#0D1B3E', fontWeight: '700' },
-
-  // Cards historial conductor
-  cobroCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: '#F5F8FC', borderRadius: 16,
-    borderWidth: 1.5, borderColor: '#E3ECF7',
-    padding: 14, marginBottom: 10,
-  },
-  cobroAvatarCircle: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: '#0D1B3E', alignItems: 'center', justifyContent: 'center',
-  },
-  cobroAvatarText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  cobroPadre: { fontSize: 14, fontWeight: '700', color: '#0D1B3E', marginBottom: 4 },
-  cobroMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 },
+  cobroCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#F5F8FC', borderRadius: 18, borderWidth: 1.5, borderColor: '#E3ECF7', padding: 14, marginBottom: 10 },
+  cobroAvatarCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#0D1B3E', alignItems: 'center', justifyContent: 'center' },
+  cobroAvatarText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
+  cobroPadre: { fontSize: 14, fontWeight: '700', color: '#0D1B3E', marginBottom: 2 },
+  cobroMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 },
   cobroMetaText: { fontSize: 11, color: '#888' },
-  cobroMonto: { fontSize: 15, fontWeight: '800', color: '#0D1B3E' },
-  depositadoBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: '#E8F0FE', borderRadius: 20,
-    paddingVertical: 3, paddingHorizontal: 8,
-  },
-  depositadoDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#00AEEF' },
-  depositadoText: { fontSize: 10, color: '#00AEEF', fontWeight: '700' },
-
-  // Tab bar
-  tabBar: {
-    flexDirection: 'row', backgroundColor: '#fff',
-    paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f0f0f0',
-  },
-  tab: { flex: 1, alignItems: 'center', borderRadius: 16, paddingVertical: 4 },
-  tabIconWrap: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  tabIconWrapActive: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#FFD700', alignItems: 'center', justifyContent: 'center' },
-  tabLabel: { fontSize: 11, color: '#aaa', marginTop: 4 },
-  tabLabelActive: { fontSize: 11, color: '#0D1B3E', fontWeight: 'bold', marginTop: 4 },
+  cobroMonto: { fontSize: 16, fontWeight: 'bold', color: '#0D1B3E' },
+  depositadoBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#E6F9EE', borderRadius: 12, paddingVertical: 2, paddingHorizontal: 8 },
+  depositadoDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#16A34A' },
+  depositadoText: { fontSize: 11, color: '#16A34A', fontWeight: '700' },
 });
