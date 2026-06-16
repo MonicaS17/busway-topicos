@@ -163,9 +163,8 @@ export default function MarketplaceScreen({ navigation, route }) {
         )}
       </View>
 
-      {/* Tab bar */}
-      <TabBar insets={insets} onLogout={() => navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] })} />
     </SafeAreaView>
+
   );
 }
 
@@ -1402,6 +1401,7 @@ function CardRuta({ ruta }) {
 }
 
 // ─── Tab bar ──────────────────────────────────────────────────────────────────
+/*
 function TabBar({ insets, onLogout }) {
   const tabs = [
     { icon: 'home-outline', label: 'Inicio' },
@@ -1428,6 +1428,7 @@ function TabBar({ insets, onLogout }) {
     </View>
   );
 }
+*/
 
 // ─── Estilos ──────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
@@ -1639,6 +1640,7 @@ const styles = StyleSheet.create({
   emptyDesc: { fontSize: 13, color: '#aaa', textAlign: 'center' },
 
   // Tab bar
+
   tabBar: { flexDirection: 'row', backgroundColor: '#fff', paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f0f0f0' },
   tab: { flex: 1, alignItems: 'center', borderRadius: 16, paddingVertical: 4 },
   tabIconWrap: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
