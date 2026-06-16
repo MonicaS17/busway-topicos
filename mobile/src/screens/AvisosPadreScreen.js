@@ -43,7 +43,7 @@ const NOTIFICACIONES_MOCK = [
 ];
 
 export default function AvisosPadreScreen({ navigation, route }) {
-  const { usuario } = route.params;
+  const { usuario } = route.params || { usuario: {} };
   const [notificaciones, setNotificaciones] = useState(NOTIFICACIONES_MOCK);
   const [expandida, setExpandida] = useState(null);
 
@@ -94,19 +94,23 @@ export default function AvisosPadreScreen({ navigation, route }) {
 
       {/* ── Card blanca ── */}
       <View style={s.card}>
-        {/* Subheader */}
+        {/* Subheader Modificado */}
         <View style={s.subHeader}>
-          <View>
-            <Text style={s.subTitle}>Notificaciones recibidas</Text>
-            {sinLeer > 0
-              ? <Text style={s.subSub}>{sinLeer} sin leer</Text>
-              : <Text style={s.subSub}>Todo al día ✓</Text>}
+          <Text style={s.subTitle}>Notificaciones recibidas</Text>
+          
+          <View style={s.actionRow}>
+            {sinLeer > 0 ? (
+              <Text style={s.subSub}>{sinLeer} sin leer</Text>
+            ) : (
+              <Text style={s.subSub}>Todo al día ✓</Text>
+            )}
+
+            {sinLeer > 0 && (
+              <TouchableOpacity onPress={marcarTodasLeidas} activeOpacity={0.8}>
+                <Text style={s.markAll}>Marcar todas como leídas</Text>
+              </TouchableOpacity>
+            )}
           </View>
-          {sinLeer > 0 && (
-            <TouchableOpacity onPress={marcarTodasLeidas} activeOpacity={0.8}>
-              <Text style={s.markAll}>Marcar todas como leídas</Text>
-            </TouchableOpacity>
-          )}
         </View>
 
         <ScrollView contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
@@ -220,14 +224,26 @@ const s = StyleSheet.create({
     borderTopLeftRadius: 28, borderTopRightRadius: 28,
   },
 
-  // Subheader dentro de la card
+  // Subheader corregido
   subHeader: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: '6%', paddingTop: 22, paddingBottom: 12,
-    borderBottomWidth: 1, borderBottomColor: '#F0F4FA',
+    flexDirection: 'column', 
+    paddingHorizontal: '6%', 
+    paddingTop: 22, 
+    paddingBottom: 12,
+    borderBottomWidth: 1, 
+    borderBottomColor: '#F0F4FA',
+    gap: 6,
   },
   subTitle: { fontSize: 14, fontWeight: '700', color: '#0D1B3E', textTransform: 'uppercase', letterSpacing: 0.5 },
-  subSub: { fontSize: 12, color: '#aaa', marginTop: 2 },
+  
+  // Nueva fila contenedora para los elementos inferiores
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  subSub: { fontSize: 12, color: '#aaa' },
   markAll: { fontSize: 12, color: '#00AEEF', fontWeight: '600' },
 
   body: { paddingHorizontal: '6%', paddingTop: 16, paddingBottom: 32, gap: 10 },
