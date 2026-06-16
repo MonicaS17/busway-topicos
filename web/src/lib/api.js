@@ -1,4 +1,4 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 async function apiFetch(endpoint, options = {}) {
   const token = localStorage.getItem('busway_token');
@@ -37,7 +37,7 @@ export const api = {
   getConductorEstudiantes: () => apiFetch('/api/conductor/estudiantes'),
   getConductorPagos: () => apiFetch('/api/pagos'),
   // Padre
-  getPadreHijos: () => apiFetch('/api/padre/hijos'),
-  getPadrePagos: () => apiFetch('/api/padre/pagos'),
+  getPadreHijos: () => apiFetch('/api/padre/mis-hijos'),
+  getPadrePagos: () => apiFetch('/api/pagos/mis-pagos'),
 
 };

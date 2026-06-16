@@ -12,14 +12,25 @@ function ReadOnlyField({ label, value }) {
   );
 }
 
-function ProfilePhoto({ initials, name }) {
+function ProfilePhoto({ initials, name, label, photoURL }) {
   return (
     <div className="flex flex-col items-center rounded-lg bg-navy p-6 text-center text-white">
-      <div className="flex h-32 w-32 shrink-0 items-center justify-center rounded-full bg-busway-yellow text-4xl font-extrabold text-navy shadow-sm ring-4 ring-white/10">
-        {initials}
+      <div className="h-32 w-32 shrink-0 rounded-full ring-4 ring-white/10 overflow-hidden shadow-sm">
+        {photoURL ? (
+          <img
+            src={photoURL}
+            alt={name}
+            className="h-full w-full object-cover"
+            referrerPolicy="no-referrer"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-busway-yellow text-4xl font-extrabold text-navy">
+            {initials}
+          </div>
+        )}
       </div>
       <div className="mt-4">
-        <p className="text-xs font-bold uppercase text-white/60">Padre de familia</p>
+        <p className="text-xs font-bold uppercase text-white/60">{label}</p>
         <h2 className="mt-1 text-2xl font-extrabold">{name}</h2>
         <p className="mt-1 text-sm font-medium text-white/70">Dueño de la cuenta</p>
       </div>
@@ -56,6 +67,7 @@ export default function PadrePerfilPage() {
   const initials = usuario
     ? `${usuario.nombre?.[0] ?? ''}${usuario.apellido?.[0] ?? ''}`.toUpperCase()
     : 'PB';
+  const photoURL = usuario?.foto_perfil ?? null;
 
   const parentInfo = [
     ['Nombre', nombre],
@@ -69,7 +81,7 @@ export default function PadrePerfilPage() {
       <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
         <DataCard title="Datos personales">
           <div className="space-y-5">
-            <ProfilePhoto initials={initials} name={nombre} />
+            <ProfilePhoto initials={initials} name={nombre} label="Padre de familia" photoURL={photoURL} />
             <div className="grid gap-3 sm:grid-cols-2">
               {parentInfo.map(([label, value]) => (
                 <ReadOnlyField key={label} label={label} value={value} />

@@ -32,7 +32,7 @@ export default function DashboardScreen({ navigation, route }) {
   const menuConductor = [
     { icon: 'document-text-outline', label: 'Solicitudes', desc: 'Padres interesados en tu ruta', screen: 'Marketplace' },
     { icon: 'map-outline', label: 'Viajes', desc: 'Inicia y controla tu ruta' },
-    { icon: 'notifications-outline', label: 'Notificaciones', desc: 'Avisa a tus padres' },
+    { icon: 'notifications-outline', label: 'Notificaciones', desc: 'Avisa a tus padres', screen: 'Notificaciones' },
     { icon: 'card-outline', label: 'Pagos', desc: 'Tus cobros mensuales' },
   ];
 
@@ -48,7 +48,14 @@ export default function DashboardScreen({ navigation, route }) {
   const tabs = [
     { icon: 'home-outline', label: 'Inicio', active: true },
     { icon: 'map-outline', label: 'Ruta' },
-    { icon: 'notifications-outline', label: 'Avisos' },
+    {
+      icon: 'notifications-outline',
+      label: 'Avisos',
+      onPress: () => navigation.navigate(
+        usuario.tipo === 'conductor' ? 'Notificaciones' : 'Avisos',
+        { usuario }
+      ),
+    },
     { icon: 'log-out-outline', label: 'Salir', onPress: handleLogout, isLogout: true },
   ];
   

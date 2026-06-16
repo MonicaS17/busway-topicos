@@ -12,13 +12,24 @@ function ReadOnlyField({ label, value }) {
   );
 }
 
-function ProfilePhoto({ initials, name, label }) {
+function ProfilePhoto({ initials, name, label, photoURL }) {
   return (
     <div className="flex flex-col items-center rounded-lg bg-navy p-6 text-center text-white">
-      <div className="flex h-32 w-32 shrink-0 items-center justify-center rounded-full bg-busway-yellow text-4xl font-extrabold text-navy shadow-sm ring-4 ring-white/10">
-        {initials}
+      <div className="h-32 w-32 shrink-0 rounded-full ring-4 ring-white/10 overflow-hidden shadow-sm">
+        {photoURL ? (
+          <img
+            src={photoURL}
+            alt={name}
+            className="h-full w-full object-cover"
+            referrerPolicy="no-referrer"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-busway-yellow text-4xl font-extrabold text-navy">
+            {initials}
+          </div>
+        )}
       </div>
-      <div className="mt-4 min-w-0">
+      <div className="mt-4">
         <p className="text-xs font-bold uppercase text-white/60">{label}</p>
         <h2 className="mt-1 text-2xl font-extrabold">{name}</h2>
         <p className="mt-1 text-sm font-medium text-white/70">Dueño de la cuenta</p>
@@ -33,13 +44,11 @@ export default function ConductorPerfilPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Leer datos básicos del localStorage (ya los tenemos del login)
     try {
       const raw = localStorage.getItem('busway_usuario');
       if (raw) setUsuario(JSON.parse(raw));
     } catch {}
 
-    // Pedir vehículo al backend (no está en localStorage)
     api.getConductorPerfil()
       .then((data) => setVehiculo(data.vehiculo))
       .catch(console.error)
@@ -58,6 +67,7 @@ export default function ConductorPerfilPage() {
   const initials = usuario
     ? `${usuario.nombre?.[0] ?? ''}${usuario.apellido?.[0] ?? ''}`.toUpperCase()
     : 'CB';
+  const photoURL = usuario?.foto_perfil ?? null;
 
   const driverInfo = [
     ['Nombre', nombre],
@@ -80,7 +90,7 @@ export default function ConductorPerfilPage() {
       <div className="grid gap-5 lg:grid-cols-2">
         <DataCard title="Datos del conductor">
           <div className="space-y-5">
-            <ProfilePhoto initials={initials} name={nombre} label="Conductor" />
+            <ProfilePhoto initials={initials} name={nombre} label="Conductor" photoURL={photoURL} />
             <div className="grid gap-3 sm:grid-cols-2">
               {driverInfo.map(([label, value]) => (
                 <ReadOnlyField key={label} label={label} value={value} />

@@ -3,7 +3,7 @@ import Navbar from '@/components/Navbar';
 
 export function PublicPage({ eyebrow, title, description, children }) {
   return (
-    <main className="min-h-screen bg-busway-light">
+    <main className="flex min-h-screen flex-col bg-busway-light">
       <Navbar />
       <section className="border-b border-slate-200 bg-white px-5 py-12">
         <div className="mx-auto max-w-6xl">
@@ -12,7 +12,7 @@ export function PublicPage({ eyebrow, title, description, children }) {
           {description && <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">{description}</p>}
         </div>
       </section>
-      <section className="px-5 py-10">
+      <section className="flex-1 px-5 py-10">
         <div className="mx-auto max-w-6xl">{children}</div>
       </section>
       <Footer />

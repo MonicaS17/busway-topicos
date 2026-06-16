@@ -33,7 +33,7 @@ export default function Sidebar({ role = 'admin' }) {
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
-  const [profile, setProfile] = useState({ name: '...', label: '', initials: '..' });
+  const [profile, setProfile] = useState({ name: '...', label: '', initials: '..', photoURL: null });
 
   useEffect(() => {
     try {
@@ -45,7 +45,7 @@ export default function Sidebar({ role = 'admin' }) {
       const label =
         u.tipo === 'administrador' ? 'Administrador' :
         u.tipo === 'conductor' ? 'Conductor' : 'Padre de familia';
-      setProfile({ name: nombre, label, initials });
+      setProfile({ name: nombre, label, initials, photoURL: u.foto_perfil ?? null });
     } catch {}
   }, []);
 
@@ -104,9 +104,18 @@ export default function Sidebar({ role = 'admin' }) {
         collapsed ? 'justify-center' : 'justify-between',
       ].join(' ')}>
         <div className="flex min-w-0 items-center gap-2">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-busway-yellow text-sm font-extrabold text-navy shadow-sm ring-2 ring-white/15">
-            {profile.initials}
-          </span>
+          {profile.photoURL ? (
+            <img
+              src={profile.photoURL}
+              alt={profile.name}
+              referrerPolicy="no-referrer"
+              className="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-white/15"
+            />
+          ) : (
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-busway-yellow text-sm font-extrabold text-navy shadow-sm ring-2 ring-white/15">
+              {profile.initials}
+            </span>
+          )}
           {!collapsed && (
             <span className="min-w-0">
               <span className="block truncate text-sm font-extrabold text-white">{profile.name}</span>

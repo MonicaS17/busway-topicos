@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { FiPlus, FiSearch, FiShield, FiUsers, FiX } from 'react-icons/fi';
+import { FiSearch, FiShield, FiUsers } from 'react-icons/fi';
 import { api } from '@/lib/api';
 
 export default function UsuariosPage() {
@@ -8,8 +8,6 @@ export default function UsuariosPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterRol, setFilterRol] = useState('Todos');
-  const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ nombre: '', email: '', rol: 'Padre' });
 
   useEffect(() => {
     api.getUsuarios()
@@ -48,20 +46,6 @@ export default function UsuariosPage() {
     }
   };
 
-  const handleCreate = () => {
-    if (!form.nombre || !form.email) return;
-    setUsers([{
-      id: Date.now(),
-      nombre: form.nombre,
-      email: form.email,
-      rol: form.rol,
-      status: 'Activo',
-      fecha: new Date().toLocaleDateString('es-PA'),
-    }, ...users]);
-    setForm({ nombre: '', email: '', rol: 'Padre' });
-    setShowModal(false);
-  };
-
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -72,22 +56,12 @@ export default function UsuariosPage() {
 
   return (
     <div className="p-6 lg:p-8">
-      <div className="mb-7 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="mt-2 flex items-center gap-2 text-2xl font-extrabold text-navy">
-            <FiUsers size={23} />
-            Usuarios
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">Administra conductores y padres registrados.</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowModal(true)}
-          className="inline-flex items-center gap-2 rounded-lg bg-busway-yellow px-5 py-2.5 text-sm font-extrabold text-navy shadow-sm transition hover:bg-yellow-400"
-        >
-          <FiPlus size={17} />
-          Crear usuario
-        </button>
+      <div className="mb-7">
+        <h1 className="mt-2 flex items-center gap-2 text-2xl font-extrabold text-navy">
+          <FiUsers size={23} />
+          Usuarios
+        </h1>
+        <p className="mt-1 text-sm text-slate-500">Administra conductores y padres registrados.</p>
       </div>
 
       <div className="mb-5 grid gap-4 sm:grid-cols-3">
@@ -151,7 +125,7 @@ export default function UsuariosPage() {
                   <td className="px-5 py-4">
                     <span className={[
                       'rounded-full px-3 py-1 text-xs font-bold',
-                      u.rol === 'Conductor' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700',
+                      u.rol === 'Conductor' ? 'bg-blue-50 text-blue-700' : u.rol === 'Admin' ? 'bg-purple-50 text-purple-700' : 'bg-amber-50 text-amber-700',
                     ].join(' ')}>
                       {u.rol}
                     </span>
@@ -193,74 +167,6 @@ export default function UsuariosPage() {
           </table>
         </div>
       </section>
-
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
-          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-extrabold text-navy">Nuevo usuario</h2>
-                <p className="mt-1 text-sm text-slate-500">Crea una cuenta para padre o conductor.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowModal(false)}
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-navy"
-                aria-label="Cerrar"
-              >
-                <FiX size={18} />
-              </button>
-            </div>
-            <div className="mt-5 space-y-4">
-              <label className="block">
-                <span className="mb-1 block text-sm font-semibold text-slate-700">Nombre completo</span>
-                <input
-                  type="text"
-                  value={form.nombre}
-                  onChange={(e) => setForm({ ...form, nombre: e.target.value })}
-                  className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-busway-blue"
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-sm font-semibold text-slate-700">Correo electrónico</span>
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-busway-blue"
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-sm font-semibold text-slate-700">Rol</span>
-                <select
-                  value={form.rol}
-                  onChange={(e) => setForm({ ...form, rol: e.target.value })}
-                  className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-busway-blue"
-                >
-                  <option value="Padre">Padre</option>
-                  <option value="Conductor">Conductor</option>
-                </select>
-              </label>
-            </div>
-            <div className="mt-6 flex gap-3">
-              <button
-                type="button"
-                onClick={() => setShowModal(false)}
-                className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleCreate}
-                className="flex-1 rounded-lg bg-busway-yellow py-2.5 text-sm font-extrabold text-navy hover:bg-yellow-400"
-              >
-                Guardar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
