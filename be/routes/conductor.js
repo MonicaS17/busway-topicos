@@ -75,7 +75,8 @@ router.get('/:id/perfil', verifyToken, async (req, res) => {
     if (!conductor || conductor.tipo !== 'conductor') {
       return res.status(404).json({ error: 'Conductor no encontrado' });
     }
-    res.json({ conductor });
+    const vehiculo = await Vehiculo.findOne({ conductor_id: conductor._id });
+    res.json({ conductor, vehiculo });
   } catch (error) {
     res.status(500).json({ error: 'Error interno al obtener perfil del conductor' });
   }
