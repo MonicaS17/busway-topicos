@@ -4,6 +4,7 @@ const estudianteSchema = new mongoose.Schema({
   nombre: { type: String, required: true },
   padre_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Usuario', required: true },
   conductor_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Usuario', default: null },
+  ruta_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Ruta', default: null },
   qr_code: { type: String, required: true },
   estado: { type: String, default: 'Activo' },
   fecha_registro: { type: Date, default: Date.now }
