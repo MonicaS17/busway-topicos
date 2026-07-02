@@ -1,20 +1,52 @@
-import React from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, TouchableOpacity, Pressable,
   StyleSheet, StatusBar, Alert,
-  ScrollView, useWindowDimensions, Image
+  ScrollView, useWindowDimensions, Image, Modal
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { signOut } from 'firebase/auth';
 import { auth } from '../config/firebase';
+import api from '../config/api';
 
 export default function DashboardScreen({ navigation, route }) {
   const { usuario } = route.params;
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const [avisosSinLeer, setAvisosSinLeer] = useState(0);
+  const [avisoVisible, setAvisoVisible] = useState(false);
+  const [avisoActual, setAvisoActual] = useState(null);
+  const avisosDescartados = useRef(new Set());
   const avatarSize = Math.min(width * 0.16, 64);
   const logoSize = 40;
+
+  const cargarAvisosSinLeer = useCallback(async () => {
+    if (usuario.tipo !== 'padre') return;
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const response = await api.get('/api/notificaciones/padre', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setAvisosSinLeer(response.data.sinLeer || 0);
+      const avisoPendiente = (response.data.notificaciones || []).find(
+        (aviso) => !aviso.leida && !avisosDescartados.current.has(aviso._id)
+      );
+      if (avisoPendiente) {
+        setAvisoActual(avisoPendiente);
+        setAvisoVisible(true);
+      }
+    } catch (error) {
+      console.log('No se pudo consultar avisos sin leer:', error.response?.data || error.message);
+    }
+  }, [usuario.tipo]);
+
+  useEffect(() => {
+    cargarAvisosSinLeer();
+    if (usuario.tipo !== 'padre') return undefined;
+    const intervalo = setInterval(cargarAvisosSinLeer, 8000);
+    return () => clearInterval(intervalo);
+  }, [cargarAvisosSinLeer, usuario.tipo]);
 
   const handleLogout = async () => {
     try {
@@ -27,6 +59,17 @@ export default function DashboardScreen({ navigation, route }) {
       Alert.alert('Error', 'No se pudo cerrar sesión');
       console.error('Logout error:', error);
     }
+  };
+
+  const cerrarAviso = () => {
+    if (avisoActual?._id) avisosDescartados.current.add(avisoActual._id);
+    setAvisoVisible(false);
+  };
+
+  const verAvisos = () => {
+    if (avisoActual?._id) avisosDescartados.current.add(avisoActual._id);
+    setAvisoVisible(false);
+    navigation.navigate('Avisos', { usuario });
   };
 
   const menuConductor = [
@@ -51,6 +94,7 @@ export default function DashboardScreen({ navigation, route }) {
     {
       icon: 'notifications-outline',
       label: 'Avisos',
+      badge: usuario.tipo === 'padre' ? avisosSinLeer : 0,
       onPress: () => navigation.navigate(
         usuario.tipo === 'conductor' ? 'Notificaciones' : 'Avisos',
         { usuario }
@@ -68,6 +112,32 @@ export default function DashboardScreen({ navigation, route }) {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor="#0D1B3E" />
+
+      <Modal visible={avisoVisible} transparent animationType="fade" onRequestClose={cerrarAviso}>
+        <View style={styles.noticeBackdrop}>
+          <View style={styles.noticeModal}>
+            <TouchableOpacity
+              style={styles.noticeClose}
+              onPress={cerrarAviso}
+              accessibilityLabel="Cerrar aviso"
+            >
+              <Ionicons name="close-outline" size={23} color="#0D1B3E" />
+            </TouchableOpacity>
+            <View style={[styles.noticeIcon, avisoActual?.audiencia !== 'todos' && styles.noticeIconEmergency]}>
+              <Ionicons
+                name={avisoActual?.audiencia === 'todos' ? 'megaphone-outline' : 'alert-circle-outline'}
+                size={30}
+                color={avisoActual?.audiencia === 'todos' ? '#0D1B3E' : '#C62828'}
+              />
+            </View>
+            <Text style={styles.noticeTitle}>Nuevo aviso del conductor</Text>
+            <TouchableOpacity style={styles.noticeButton} onPress={verAvisos} activeOpacity={0.85}>
+              <Ionicons name="notifications-outline" size={18} color="#0D1B3E" />
+              <Text style={styles.noticeButtonText}>Ver avisos</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Header azul */}
       <View style={styles.header}>
@@ -201,6 +271,11 @@ export default function DashboardScreen({ navigation, route }) {
                     size={20}
                     color={tab.active || (tab.isLogout && pressed) ? '#0D1B3E' : '#aaa'}
                   />
+                  {tab.badge > 0 && (
+                    <View style={styles.tabBadge}>
+                      <Text style={styles.tabBadgeText}>{tab.badge > 9 ? '9+' : tab.badge}</Text>
+                    </View>
+                  )}
                 </View>
                 <Text style={
                   tab.active || (tab.isLogout && pressed)
@@ -442,7 +517,56 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
   },
+  noticeBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(13,27,62,0.58)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: '8%',
+  },
+  noticeModal: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 24,
+    alignItems: 'center',
+  },
+  noticeClose: {
+    position: 'absolute',
+    right: 10,
+    top: 10,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
+  },
+  noticeIcon: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: '#FFF4B8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  noticeIconEmergency: { backgroundColor: '#FDECEC' },
+  noticeTitle: { fontSize: 18, fontWeight: '800', color: '#0D1B3E', textAlign: 'center' },
+  noticeButton: {
+    minHeight: 48,
+    alignSelf: 'stretch',
+    backgroundColor: '#FFD700',
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 22,
+  },
+  noticeButtonText: { color: '#0D1B3E', fontSize: 14, fontWeight: '800' },
 
   //BOTÓN DE SALIR — ABAJO
   tabIconWrapActive: {
@@ -452,6 +576,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFD700',
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+  },
+  tabBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    backgroundColor: '#FF3B30',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabBadgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '800',
   },
 
   tabLabel: {
