@@ -18,6 +18,7 @@ export default function LoginPage() {
   const [correoRecuperacion, setCorreoRecuperacion] = useState('');
   const [enviandoRecuperacion, setEnviandoRecuperacion] = useState(false);
   const [mensajeRecuperacion, setMensajeRecuperacion] = useState('');
+  const [errorRecuperacion, setErrorRecuperacion] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -71,21 +72,50 @@ export default function LoginPage() {
 
   const handleRecuperarContrasena = async (e) => {
     e.preventDefault();
-    if (!correoRecuperacion) return;
+    const correo = correoRecuperacion.trim().toLowerCase();
+    if (!correo) {
+      setErrorRecuperacion('Ingresa tu correo electrónico.');
+      return;
+    }
     setEnviandoRecuperacion(true);
     setMensajeRecuperacion('');
+    setErrorRecuperacion('');
 
     try {
-      await sendPasswordResetEmail(auth, correoRecuperacion);
-      setMensajeRecuperacion('✅ Revisa tu bandeja de entrada. El enlace es válido por 30 minutos.');
+      auth.languageCode = 'es';
+      await sendPasswordResetEmail(auth, correo);
+      setMensajeRecuperacion('Si el correo está registrado, recibirás un enlace para restablecer tu contraseña. Revisa también la carpeta de spam.');
       setCorreoRecuperacion('');
     } catch (err) {
-      // Por seguridad siempre mostramos éxito aunque el correo no exista
-      setMensajeRecuperacion('✅ Si el correo está registrado, recibirás un enlace para restablecer tu contraseña.');
-      setCorreoRecuperacion('');
+      if (err.code === 'auth/user-not-found') {
+        setMensajeRecuperacion('Si el correo está registrado, recibirás un enlace para restablecer tu contraseña.');
+      } else {
+        const mensajes = {
+          'auth/invalid-email': 'El correo electrónico no tiene un formato válido.',
+          'auth/missing-email': 'Ingresa tu correo electrónico.',
+          'auth/too-many-requests': 'Se realizaron demasiados intentos. Espera unos minutos.',
+          'auth/network-request-failed': 'No se pudo conectar con Firebase. Verifica tu conexión.',
+          'auth/unauthorized-continue-uri': 'El dominio de la web no está autorizado en Firebase.',
+        };
+        setErrorRecuperacion(mensajes[err.code] || 'No se pudo enviar el correo de recuperación. Intenta nuevamente.');
+      }
     } finally {
       setEnviandoRecuperacion(false);
     }
+  };
+
+  const abrirRecuperacion = () => {
+    setCorreoRecuperacion(form.email.trim().toLowerCase());
+    setMensajeRecuperacion('');
+    setErrorRecuperacion('');
+    setModalVisible(true);
+  };
+
+  const cerrarRecuperacion = () => {
+    setModalVisible(false);
+    setCorreoRecuperacion('');
+    setMensajeRecuperacion('');
+    setErrorRecuperacion('');
   };
 
   return (
@@ -168,7 +198,7 @@ export default function LoginPage() {
               <div className="text-center">
                 <button
                   type="button"
-                  onClick={() => { setModalVisible(true); setMensajeRecuperacion(''); }}
+                  onClick={abrirRecuperacion}
                   className="text-sm font-semibold text-navy transition hover:text-busway-blue"
                 >
                   ¿Olvidaste tu contraseña?
@@ -194,6 +224,12 @@ export default function LoginPage() {
               </div>
             )}
 
+            {errorRecuperacion && (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                {errorRecuperacion}
+              </div>
+            )}
+
             {!mensajeRecuperacion && (
               <form onSubmit={handleRecuperarContrasena} className="mt-5 space-y-4">
                 <div className="relative">
@@ -209,7 +245,7 @@ export default function LoginPage() {
                 </div>
                 <button
                   type="submit"
-                  disabled={enviandoRecuperacion}
+                  disabled={enviandoRecuperacion || !correoRecuperacion.trim()}
                   className="w-full rounded-xl bg-busway-yellow py-4 text-sm font-extrabold text-navy transition hover:bg-yellow-400 disabled:opacity-60"
                 >
                   {enviandoRecuperacion ? 'Enviando...' : 'Enviar enlace'}
@@ -219,10 +255,10 @@ export default function LoginPage() {
 
             <button
               type="button"
-              onClick={() => { setModalVisible(false); setCorreoRecuperacion(''); setMensajeRecuperacion(''); }}
+              onClick={cerrarRecuperacion}
               className="mt-4 w-full py-3 text-sm font-semibold text-slate-400 transition hover:text-navy"
             >
-              Cancelar
+              {mensajeRecuperacion ? 'Cerrar' : 'Cancelar'}
             </button>
           </div>
         </div>
