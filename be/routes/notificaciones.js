@@ -30,7 +30,6 @@ function formatearNotificacion(notificacion, usuarioId) {
     hijos_ids: notificacion.hijos_ids,
     viaje_id: notificacion.viaje_id,
     enviados: notificacion.enviados,
-    fallidos: notificacion.fallidos,
     fecha: notificacion.fecha,
     createdAt: notificacion.createdAt,
     leida,
@@ -158,7 +157,6 @@ router.post('/conductor/enviar', verifyToken, async (req, res) => {
       viaje_id: viajeId,
       audiencia,
       enviados: padresIds.length,
-      fallidos: 0,
       fecha: new Date(),
     });
 

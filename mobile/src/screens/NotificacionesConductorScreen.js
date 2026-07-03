@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
   StyleSheet, StatusBar, Alert, KeyboardAvoidingView, Platform,
@@ -51,6 +51,7 @@ function formatearFecha(fecha) {
 }
 
 export default function NotificacionesConductorScreen({ navigation }) {
+  const formularioRef = useRef(null);
   const [mensaje, setMensaje] = useState('');
   const [seleccionado, setSeleccionado] = useState(null);
   const [audiencia, setAudiencia] = useState('todos');
@@ -102,18 +103,17 @@ export default function NotificacionesConductorScreen({ navigation }) {
     }
   }, []);
 
-  useEffect(() => {
-    if (audiencia === 'individual') cargarAsistentes();
-  }, [audiencia, cargarAsistentes]);
-
   const seleccionarAudiencia = async (tipo) => {
     setAudiencia(tipo);
-    if (tipo !== 'individual') setEstudianteSeleccionado(null);
+    setEstudianteSeleccionado(null);
 
-    if (tipo === 'asistentes') {
+    if (tipo === 'asistentes' || tipo === 'individual') {
       const lista = await cargarAsistentes();
       if (lista && lista.length === 0) {
-        Alert.alert('Sin asistencia', 'No se encontraron estudiantes con asistencia registrada hoy.');
+        const mensaje = tipo === 'individual'
+          ? 'No se encuentran estudiantes a bordo para enviar un mensaje de emergencia.'
+          : 'No se encontraron estudiantes a bordo para enviar el aviso.';
+        Alert.alert('Sin estudiantes a bordo', mensaje);
       }
     }
   };
@@ -223,12 +223,16 @@ export default function NotificacionesConductorScreen({ navigation }) {
 
         {tab === 'enviar' && (
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
             style={{ flex: 1 }}
           >
             <ScrollView
+              ref={formularioRef}
               contentContainerStyle={s.body}
               keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
               showsVerticalScrollIndicator={false}
             >
               <Text style={s.sectionTitle}>Enviar a</Text>
@@ -324,15 +328,20 @@ export default function NotificacionesConductorScreen({ navigation }) {
                   placeholder="Ej: El bus saldrá 5 minutos tarde hoy..."
                   placeholderTextColor="#9AA4B2"
                   multiline
-                  maxLength={300}
+                  maxLength={500}
                   value={mensaje}
+                  onFocus={() => {
+                    setTimeout(() => {
+                      formularioRef.current?.scrollToEnd({ animated: true });
+                    }, 250);
+                  }}
                   onChangeText={(t) => {
                     setMensaje(t);
                     if (seleccionado && t !== seleccionado.texto) setSeleccionado(null);
                   }}
                   textAlignVertical="top"
                 />
-                <Text style={s.charCount}>{mensaje.length}/300</Text>
+                <Text style={s.charCount}>{mensaje.length}/500</Text>
               </View>
 
               <TouchableOpacity

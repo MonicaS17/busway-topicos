@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const notificacionSchema = new mongoose.Schema({
   conductor_id: { type: mongoose.Schema.Types.ObjectId, ref: 'usuarios', required: true },
-  tipo: { type: String, enum: ['masiva', 'individual', 'emergencia', 'asistencia_subida', 'asistencia_bajada'], required: true },
+  tipo: { type: String, enum: ['masiva', 'individual', 'emergencia'], required: true },
   mensaje: { type: String, required: true },
   destinatarios: [{ type: mongoose.Schema.Types.ObjectId, ref: 'usuarios' }],
   hijos_ids: [{ type: mongoose.Schema.Types.ObjectId, ref: 'estudiantes' }],
@@ -13,8 +13,6 @@ const notificacionSchema = new mongoose.Schema({
     fecha_lectura: { type: Date, default: Date.now },
   }],
   enviados: { type: Number, default: 0 },
-  fallidos: { type: Number, default: 0 },
-  leida: { type: Boolean, default: false },
   fecha: { type: Date, default: Date.now },
   createdAt: { type: Date, default: Date.now },
 }, { versionKey: false });
