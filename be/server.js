@@ -12,10 +12,16 @@ const conductorRoutes = require('./routes/conductor'); // <-- ¡Limpiado aquí! 
 const padreRoutes = require('./routes/padres');
 const adminRoutes = require('./routes/admin');
 const notificacionesRoutes = require('./routes/notificaciones');
+const stripeRoutes = require('./routes/stripe');
 
 const app = express();
 
 app.use(cors());
+
+// Stripe webhook necesita el body raw (sin procesar) para verificar la firma
+// DEBE ir antes de express.json() para que no convierta el body a objeto
+app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
+
 app.use(express.json({ limit: '1mb' })) 
 
 // Rutas base de la API
@@ -26,6 +32,7 @@ app.use('/api/conductor', conductorRoutes);
 app.use('/api/padre', padreRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notificaciones', notificacionesRoutes);
+app.use('/api/stripe', stripeRoutes);
 
 // Ruta de prueba
 app.get('/', (req, res) => {

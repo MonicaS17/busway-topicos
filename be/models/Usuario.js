@@ -11,6 +11,7 @@ const usuarioSchema = new mongoose.Schema({
   estado: { type: String, default: 'activo' },
   fcm_token: [{ type: String }],
   fecha_registro: { type: Date, default: Date.now },
+  stripe_customer_id: { type: String, default: null },
   datos_conductor: { type: Object, default: null },
   datos_padre: { type: Object, default: null },
   datos_admin: { type: Object, default: null }
