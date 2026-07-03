@@ -3,6 +3,16 @@ const router = express.Router();
 const verifyToken = require('../middleware/verifyToken');
 const Usuario = require('../models/Usuario');
 const Pago = require('../models/Pago');
+require('../models/Acuerdo');
+require('../models/Solicitud');
+require('../models/Estudiante');
+
+const pagoValido = {
+  tarifa_conductor: { $exists: true },
+  mes_contrato: { $exists: true },
+  fecha: { $exists: true },
+  estado: { $in: ['Exitoso', 'Fallido', 'Pendiente'] },
+};
 
 const dinero = (valor) => `$${Number(valor || 0).toFixed(2)}`;
 const fecha = (valor) => new Intl.DateTimeFormat('es-PA', {
@@ -55,7 +65,7 @@ router.get('/', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Acceso exclusivo para administradores' });
     }
 
-    const pagos = await Pago.find()
+    const pagos = await Pago.find(pagoValido)
       .populate(populateAcuerdo)
       .populate('padre_id', 'nombre apellido correo')
       .populate('conductor_id', 'nombre apellido correo')
@@ -80,7 +90,10 @@ router.get('/mis-pagos', verifyToken, async (req, res) => {
   try {
     const padre = await obtenerUsuario(req, res);
     if (!padre) return;
-    const pagos = await Pago.find({ padre_id: padre._id })
+    if (padre.tipo !== 'padre') {
+      return res.status(403).json({ error: 'Acceso exclusivo para padres' });
+    }
+    const pagos = await Pago.find({ ...pagoValido, padre_id: padre._id })
       .populate(populateAcuerdo)
       .populate('conductor_id', 'nombre apellido')
       .sort({ fecha: -1 });
@@ -97,7 +110,7 @@ router.get('/recibidos', verifyToken, async (req, res) => {
     if (conductor.tipo !== 'conductor') {
       return res.status(403).json({ error: 'Acceso exclusivo para conductores' });
     }
-    const pagos = await Pago.find({ conductor_id: conductor._id })
+    const pagos = await Pago.find({ ...pagoValido, conductor_id: conductor._id })
       .populate(populateAcuerdo)
       .populate('padre_id', 'nombre apellido')
       .sort({ fecha: -1 });

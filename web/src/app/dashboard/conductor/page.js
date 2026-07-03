@@ -53,7 +53,7 @@ export default function ConductorDashboard() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
         <StatsCard title="Rutas registradas" value={String(rutas.length)} icon={<FiTruck />} />
-        <StatsCard title="Escuelas" value={String(new Set(rutas.map(e => e.escuela)).size)} icon={<FiTruck />} color="#071634" />
+        <StatsCard title="Escuelas" value={String(new Set(rutas.map((ruta) => ruta.escuela).filter(Boolean)).size)} icon={<FiTruck />} color="#071634" />
         <StatsCard title="Estudiantes" value={String(estudiantes.length)} icon={<FiUsers />} color="#168FE3" />
         <StatsCard title="Pagos exitosos" value={String(pagos.filter((p) => p.status === 'Exitoso').length)} icon={<FiCreditCard />} color="#FFC20A" />
       </div>
@@ -72,8 +72,8 @@ export default function ConductorDashboard() {
           {rutas.map((ruta) => (
             <article key={ruta._id} className="rounded-md border border-slate-200 p-4">
               <h3 className="text-sm font-extrabold text-navy">{ruta.nombre}</h3>
-              <p className="mt-1 text-xs text-slate-500">{ruta.escuela} · {ruta.zona}</p>
-              <p className="mt-3 text-sm font-bold text-busway-blue">{ruta.frecuencia}</p>
+              <p className="mt-1 text-xs text-slate-500">{ruta.escuela || 'Sin escuela registrada'}{ruta.zona ? ` · ${ruta.zona}` : ''}</p>
+              <p className="mt-3 text-sm font-bold text-busway-blue">{ruta.frecuencia || '—'}</p>
             </article>
           ))}
           {rutas.length === 0 && (

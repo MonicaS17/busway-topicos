@@ -44,13 +44,11 @@ export default function PadrePerfilPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('busway_usuario');
-      if (raw) setUsuario(JSON.parse(raw));
-    } catch {}
-
-    api.getPadreHijos()
-      .then((data) => setHijos(data.hijos))
+    Promise.all([api.getPerfil(), api.getPadreHijos()])
+      .then(([perfilData, hijosData]) => {
+        setUsuario(perfilData.usuario);
+        setHijos(hijosData.hijos);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);

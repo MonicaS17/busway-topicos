@@ -34,7 +34,8 @@ router.post('/', async (req, res) => {
 // DELETE eliminar escuela
 router.delete('/:id', async (req, res) => {
   try {
-    await Escuela.findByIdAndDelete(req.params.id);
+    const escuela = await Escuela.findByIdAndDelete(req.params.id);
+    if (!escuela) return res.status(404).json({ error: 'Escuela no encontrada' });
     res.json({ mensaje: 'Escuela eliminada' });
   } catch (error) {
     res.status(500).json({ error: 'Error interno del servidor' });

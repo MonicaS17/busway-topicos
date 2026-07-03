@@ -44,13 +44,11 @@ export default function ConductorPerfilPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('busway_usuario');
-      if (raw) setUsuario(JSON.parse(raw));
-    } catch {}
-
     api.getConductorPerfil()
-      .then((data) => setVehiculo(data.vehiculo))
+      .then((data) => {
+        setUsuario(data.usuario);
+        setVehiculo(data.vehiculo);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);

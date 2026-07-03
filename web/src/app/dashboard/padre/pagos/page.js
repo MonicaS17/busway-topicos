@@ -84,7 +84,9 @@ export default function PadrePagosPage() {
                         'rounded-full px-3 py-1 text-xs font-bold',
                         p.estado === 'Exitoso' || p.estado === 'Pagado'
                           ? 'bg-emerald-50 text-emerald-700'
-                          : 'bg-red-50 text-red-700',
+                          : p.estado === 'Pendiente'
+                            ? 'bg-amber-50 text-amber-700'
+                            : 'bg-red-50 text-red-700',
                       ].join(' ')}>
                         {p.estado}
                       </span>

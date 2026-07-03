@@ -88,7 +88,7 @@ export default function IngresosPage() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
           <h2 className="text-sm font-extrabold text-navy">Pagos recientes</h2>
           <div className="flex gap-2">
-            {['Todos', 'Exitoso', 'Fallido'].map((s) => (
+            {['Todos', 'Exitoso', 'Pendiente', 'Fallido'].map((s) => (
               <button
                 key={s}
                 type="button"
@@ -125,7 +125,11 @@ export default function IngresosPage() {
                   <td className="px-5 py-4">
                     <span className={[
                       'rounded-full px-3 py-1 text-xs font-bold',
-                      p.status === 'Exitoso' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700',
+                      p.status === 'Exitoso'
+                        ? 'bg-emerald-50 text-emerald-700'
+                        : p.status === 'Pendiente'
+                          ? 'bg-amber-50 text-amber-700'
+                          : 'bg-red-50 text-red-700',
                     ].join(' ')}>
                       {p.status}
                     </span>

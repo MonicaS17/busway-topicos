@@ -52,6 +52,7 @@ router.get('/mis-hijos', verifyToken, async (req, res) => {
   try {
     const padre = await Usuario.findOne({ firebase_uid: req.user.uid });
     if (!padre) return res.status(404).json({ error: 'Padre no encontrado' });
+    if (padre.tipo !== 'padre') return res.status(403).json({ error: 'Acceso exclusivo para padres' });
 
     const hijos = await Estudiante.find({ padre_id: padre._id })
       .populate('conductor_id', 'nombre apellido correo');
@@ -66,6 +67,7 @@ router.delete('/hijos/:id', verifyToken, async (req, res) => {
   try {
     const padre = await Usuario.findOne({ firebase_uid: req.user.uid });
     if (!padre) return res.status(404).json({ error: 'Padre no encontrado' });
+    if (padre.tipo !== 'padre') return res.status(403).json({ error: 'Acceso exclusivo para padres' });
 
     const hijo = await Estudiante.findOne({ _id: req.params.id, padre_id: padre._id });
     if (!hijo) return res.status(404).json({ error: 'Hijo no encontrado o no te pertenece' });

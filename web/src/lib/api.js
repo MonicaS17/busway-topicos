@@ -33,6 +33,7 @@ export const api = {
     apiFetch(`/api/escuelas/${id}`, { method: 'DELETE' }),
   getPagos: () => apiFetch('/api/pagos'),
   getLogs: () => apiFetch('/api/admin/logs'),
+  getPerfil: () => apiFetch('/api/auth/perfil'),
   // Conductor
   getConductorPerfil: () => apiFetch('/api/conductor/perfil'),
   getConductorEstudiantes: () => apiFetch('/api/conductor/estudiantes'),

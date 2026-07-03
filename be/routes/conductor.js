@@ -17,6 +17,27 @@ async function conductorAutenticado(req, res) {
   return null;
 }
 
+function serializarRuta(ruta) {
+  const paradas = ruta.paradas || [];
+  const puntos = ruta.puntos_trayectoria?.length
+    ? ruta.puntos_trayectoria
+    : paradas.map((parada) => ({
+      lat: parada.latitud,
+      lng: parada.longitud,
+      descripcion: parada.referencia || '',
+    }));
+
+  return {
+    ...ruta,
+    escuela: ruta.escuela || ruta.escuelas?.join(', ') || 'No registrada',
+    zona: ruta.zona || 'No registrada',
+    frecuencia: ruta.frecuencia || ruta.horario_inicio || 'No registrada',
+    puntos_trayectoria: puntos,
+    estado: ruta.estado || (ruta.activa === false ? 'inactiva' : 'activa'),
+    createdAt: ruta.createdAt || ruta.fecha_creacion || null,
+  };
+}
+
 // GET perfil del conductor + vehículo
 router.get('/perfil', verifyToken, async (req, res) => {
   try {
@@ -52,7 +73,10 @@ router.get('/rutas', verifyToken, async (req, res) => {
   try {
     const conductor = await conductorAutenticado(req, res);
     if (!conductor) return;
-    const rutas = await Ruta.find({ conductor_id: conductor._id }).sort({ createdAt: -1 });
+    const rutasGuardadas = await Ruta.find({ conductor_id: conductor._id }).lean();
+    const rutas = rutasGuardadas
+      .map(serializarRuta)
+      .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
     res.json({ rutas });
   } catch (error) {
     res.status(500).json({ error: 'Error interno al obtener las rutas' });
