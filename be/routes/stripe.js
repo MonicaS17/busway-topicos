@@ -130,4 +130,117 @@ router.post('/webhook', async (req, res) => {
   }
 });
 
+router.post('/create-checkout-session', verifyToken, async (req, res) => {
+  try {
+    const usuario = await Usuario.findOne({ firebase_uid: req.user.uid });
+    if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+    const acuerdo = await Acuerdo.findOne({
+      padre_id: usuario._id,
+      estado: 'activo',
+    });
+    if (!acuerdo) {
+      return res.status(400).json({
+        error: 'No tienes un contrato activo. Debes tener un acuerdo aceptado primero.',
+      });
+    }
+
+    if (!usuario.stripe_customer_id) {
+      const customer = await stripeService.crearCliente(usuario);
+      usuario.stripe_customer_id = customer.id;
+      await usuario.save();
+    }
+
+    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
+    let tarifaPriceId = acuerdo.stripe_tarifa_price_id;
+    let membresiaPriceId = acuerdo.stripe_membresia_price_id;
+
+    if (!tarifaPriceId) {
+      const tarifaPrice = await stripe.prices.create({
+        unit_amount: Math.round(acuerdo.tarifa_mensual * 100),
+        currency: 'usd',
+        recurring: { interval: 'month' },
+        product_data: {
+          name: 'Tarifa mensual - BusWay',
+          metadata: { type: 'conductor_tariff', acuerdo_id: acuerdo._id.toString() },
+        },
+      });
+      tarifaPriceId = tarifaPrice.id;
+      acuerdo.stripe_tarifa_price_id = tarifaPriceId;
+    }
+
+    if (!membresiaPriceId) {
+      const membresiaPrice = await stripe.prices.create({
+        unit_amount: Math.round(acuerdo.membresia * 100),
+        currency: 'usd',
+        recurring: { interval: 'month' },
+        product_data: {
+          name: 'Membresía BusWay',
+          metadata: { type: 'membership', acuerdo_id: acuerdo._id.toString() },
+        },
+      });
+      membresiaPriceId = membresiaPrice.id;
+      acuerdo.stripe_membresia_price_id = membresiaPriceId;
+    }
+
+    await acuerdo.save();
+
+    const successUrl = `${process.env.APP_SCHEME || 'busway'}://checkout-success?session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${process.env.APP_SCHEME || 'busway'}://checkout-cancel`;
+
+    const session = await stripe.checkout.sessions.create({
+      customer: usuario.stripe_customer_id,
+      mode: 'subscription',
+      payment_method_types: ['card'],
+      line_items: [
+        { price: tarifaPriceId, quantity: 1 },
+        { price: membresiaPriceId, quantity: 1 },
+      ],
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      metadata: {
+        acuerdo_id: acuerdo._id.toString(),
+        padre_id: acuerdo.padre_id.toString(),
+        conductor_id: acuerdo.conductor_id.toString(),
+      },
+      subscription_data: {
+        metadata: {
+          acuerdo_id: acuerdo._id.toString(),
+          padre_id: acuerdo.padre_id.toString(),
+          conductor_id: acuerdo.conductor_id.toString(),
+        },
+      },
+    });
+
+    res.json({ url: session.url, sessionId: session.id });
+  } catch (error) {
+    console.error('Error creating checkout session:', error);
+    res.status(500).json({ error: 'Error al crear la sesión de pago' });
+  }
+});
+
+// Verifica el estado de una Checkout Session después del redirect del deep link
+router.get('/checkout-status', verifyToken, async (req, res) => {
+  try {
+    const { session_id } = req.query;
+    if (!session_id) {
+      return res.status(400).json({ error: 'Falta session_id' });
+    }
+
+    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+    const session = await stripe.checkout.sessions.retrieve(session_id);
+
+    res.json({
+      status: session.status,             // 'complete' | 'open' | 'expired'
+      payment_status: session.payment_status, // 'paid' | 'unpaid' | 'no_payment_required'
+      customerId: session.customer,
+      subscriptionId: session.subscription,
+    });
+  } catch (error) {
+    console.error('Error retrieving checkout session:', error);
+    res.status(500).json({ error: 'Error al verificar la sesión de pago' });
+  }
+});
+
 module.exports = router;

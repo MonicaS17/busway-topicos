@@ -89,8 +89,69 @@ async function cancelarSuscripcion(subscriptionId) {
 async function procesarEventoWebhook(event) {
   const Acuerdo = require('../models/Acuerdo');
   const Pago = require('../models/Pago');
+  const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
   switch (event.type) {
+    case 'checkout.session.completed': {
+      const session = event.data.object;
+      const acuerdoId = session.metadata?.acuerdo_id;
+      if (!acuerdoId) {
+        console.log('checkout.session.completed sin acuerdo_id en metadata');
+        break;
+      }
+      const acuerdo = await Acuerdo.findById(acuerdoId);
+      if (!acuerdo) {
+        console.error(`Acuerdo ${acuerdoId} no encontrado`);
+        break;
+      }
+
+      const customerId = typeof session.customer === 'string' ? session.customer : session.customer?.id;
+      const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id;
+
+      if (subscriptionId) {
+        acuerdo.stripe_subscription_id = subscriptionId;
+        acuerdo.stripe_customer_id = customerId || acuerdo.stripe_customer_id;
+
+        try {
+          const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+          if (subscription.default_payment_method) {
+            const pmId = typeof subscription.default_payment_method === 'string'
+              ? subscription.default_payment_method
+              : subscription.default_payment_method.id;
+            const pm = await stripe.paymentMethods.retrieve(pmId);
+            if (pm.card?.last4) {
+              acuerdo.ultimos_4_digitos = pm.card.last4;
+            }
+          }
+        } catch (err) {
+          console.error('Error obteniendo detalles de suscripción:', err.message);
+        }
+
+        await acuerdo.save();
+        console.log(`Acuerdo ${acuerdoId} vinculado a subscription ${subscriptionId}`);
+      }
+      break;
+    }
+
+    case 'customer.subscription.created': {
+      const subscription = event.data.object;
+      const acuerdoId = subscription.metadata?.acuerdo_id;
+      if (!acuerdoId) break;
+      const acuerdo = await Acuerdo.findById(acuerdoId);
+      if (!acuerdo) break;
+      if (!acuerdo.stripe_subscription_id) {
+        acuerdo.stripe_subscription_id = subscription.id;
+        if (subscription.customer) {
+          acuerdo.stripe_customer_id = typeof subscription.customer === 'string'
+            ? subscription.customer
+            : subscription.customer.id;
+        }
+        await acuerdo.save();
+        console.log(`Subscription ${subscription.id} vinculada a acuerdo ${acuerdoId}`);
+      }
+      break;
+    }
+
     case 'invoice.paid': {
       const invoice = event.data.object;
       const subscriptionId = invoice.subscription;

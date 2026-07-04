@@ -27,6 +27,7 @@ const serializarPago = (pago) => ({
   fechaISO: pago.fecha,
   status: pago.estado,
   estado: pago.estado,
+  escuela: pago.acuerdo_id?.solicitud_id?.escuela || 'No especificada',
   estudiantes: pago.acuerdo_id?.solicitud_id?.hijos_ids?.map((hijo) => hijo.nombre).join(', ') || 'No especificado',
 });
 
@@ -35,7 +36,7 @@ const populateAcuerdo = {
   select: 'solicitud_id',
   populate: {
     path: 'solicitud_id',
-    select: 'hijos_ids',
+    select: 'escuela hijos_ids',
     populate: { path: 'hijos_ids', select: 'nombre' },
   },
 };
