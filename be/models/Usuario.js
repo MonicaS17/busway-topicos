@@ -8,6 +8,11 @@ const usuarioSchema = new mongoose.Schema({
   cedula: { type: String, required: true, unique: true },
   tipo: { type: String, enum: ['conductor', 'padre', 'administrador'], required: true },
   foto_perfil: { type: String, default: null },
+  ubicacion: {
+    provincia: { type: String, default: null },
+    distrito: { type: String, default: null },
+    corregimiento: { type: String, default: null },
+  },
   estado: { type: String, default: 'activo' },
   fcm_token: [{ type: String }],
   fecha_registro: { type: Date, default: Date.now },

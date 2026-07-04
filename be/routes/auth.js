@@ -200,4 +200,26 @@ router.patch('/usuarios/:id/estado', verifyToken, requireRole('administrador'), 
   }
 });
 
+// Guardar ubicación del padre
+router.patch('/ubicacion', verifyToken, async (req, res) => {
+  try {
+    const { provincia, distrito, corregimiento } = req.body;
+    if (!provincia || !distrito || !corregimiento) {
+      return res.status(400).json({ error: 'Provincia, distrito y corregimiento son obligatorios' });
+    }
+
+    const usuario = await Usuario.findOneAndUpdate(
+      { firebase_uid: req.user.uid },
+      { ubicacion: { provincia, distrito, corregimiento } },
+      { new: true }
+    );
+
+    if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+    res.json({ mensaje: 'Ubicación guardada correctamente', ubicacion: usuario.ubicacion });
+  } catch (error) {
+    res.status(500).json({ error: 'Error interno al guardar la ubicación' });
+  }
+});
+
 module.exports = router;

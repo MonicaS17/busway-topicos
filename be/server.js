@@ -13,6 +13,8 @@ const padreRoutes = require('./routes/padres');
 const adminRoutes = require('./routes/admin');
 const notificacionesRoutes = require('./routes/notificaciones');
 const stripeRoutes = require('./routes/stripe');
+const solicitudesRoutes = require('./routes/solicitudes');
+const acuerdosRoutes = require('./routes/acuerdos');
 
 const app = express();
 
@@ -33,6 +35,8 @@ app.use('/api/padre', padreRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notificaciones', notificacionesRoutes);
 app.use('/api/stripe', stripeRoutes);
+app.use('/api/solicitudes', solicitudesRoutes);
+app.use('/api/acuerdos', acuerdosRoutes);
 
 // Ruta de prueba
 app.get('/', (req, res) => {

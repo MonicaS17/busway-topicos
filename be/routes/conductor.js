@@ -149,4 +149,46 @@ router.patch('/viajes/:id/finalizar', verifyToken, async (req, res) => {
   }
 });
 
+// GET /api/conductor/disponibles — Lista conductores con rutas activas (para padres en Marketplace)
+router.get('/disponibles', verifyToken, async (req, res) => {
+  try {
+    const { zona, escuela } = req.query;
+
+    const filtro = { estado: 'activa' };
+    if (zona) filtro.zona = zona;
+    if (escuela) filtro.escuela = escuela;
+
+    const rutas = await Ruta.find(filtro).populate('conductor_id', 'nombre apellido foto_perfil');
+
+    const conductoresMap = new Map();
+    for (const ruta of rutas) {
+      if (!ruta.conductor_id) continue;
+      const cid = ruta.conductor_id._id.toString();
+      if (!conductoresMap.has(cid)) {
+        const vehiculo = await Vehiculo.findOne({ conductor_id: cid });
+        conductoresMap.set(cid, {
+          _id: ruta.conductor_id._id,
+          nombre: ruta.conductor_id.nombre,
+          apellido: ruta.conductor_id.apellido,
+          foto_perfil: ruta.conductor_id.foto_perfil,
+          vehiculo: vehiculo || null,
+          rutas: [],
+        });
+      }
+      conductoresMap.get(cid).rutas.push({
+        _id: ruta._id,
+        escuela: ruta.escuela,
+        zona: ruta.zona,
+        nombre: ruta.nombre,
+      });
+    }
+
+    const conductores = Array.from(conductoresMap.values());
+    res.json({ conductores });
+  } catch (error) {
+    console.error('Error obteniendo conductores disponibles:', error);
+    res.status(500).json({ error: 'Error interno al obtener los conductores disponibles' });
+  }
+});
+
 module.exports = router;
