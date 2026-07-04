@@ -29,7 +29,7 @@ export default function ConductorEstudiantesPage() {
           <table className="w-full text-sm">
             <thead className="bg-busway-yellow text-xs uppercase text-navy">
               <tr>
-                {['Estudiante', 'Escuela', 'Ruta', 'Estado'].map((h) => (
+                {['Estudiante', 'Padre o acudiente', 'Contacto', 'Ruta', 'Escuela', 'Estado'].map((h) => (
                   <th key={h} className="px-5 py-3 text-left font-bold">{h}</th>
                 ))}
               </tr>
@@ -37,16 +37,18 @@ export default function ConductorEstudiantesPage() {
             <tbody className="divide-y divide-slate-100">
               {estudiantes.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-5 py-10 text-center text-sm text-slate-400">
+                  <td colSpan={6} className="px-5 py-10 text-center text-sm text-slate-400">
                     No tienes estudiantes registrados aún.
                   </td>
                 </tr>
               ) : (
                 estudiantes.map((est) => (
                   <tr key={est._id} className="hover:bg-slate-50">
-                    <td className="px-5 py-4 font-semibold text-slate-700">{est.nombre} {est.apellido}</td>
-                    <td className="px-5 py-4 text-slate-600">{est.escuela}</td>
-                    <td className="px-5 py-4 text-slate-600">{est.ruta}</td>
+                    <td className="px-5 py-4 font-semibold text-slate-700">{est.nombre}</td>
+                    <td className="px-5 py-4 text-slate-600">{est.padre_id ? `${est.padre_id.nombre} ${est.padre_id.apellido}` : 'No disponible'}</td>
+                    <td className="px-5 py-4 text-slate-600">{est.padre_id?.correo || '—'}</td>
+                    <td className="px-5 py-4 text-slate-600">{est.ruta_id?.nombre || 'Sin asignar'}</td>
+                    <td className="px-5 py-4 text-slate-600">{est.ruta_id?.escuela || '—'}</td>
                     <td className="px-5 py-4">
                       <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
                         {est.estado}

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
   FiBarChart2, FiCreditCard, FiGrid,
-  FiHome, FiLogOut, FiMenu, FiTruck, FiUser, FiUsers, FiX,
+  FiClock, FiHome, FiLogOut, FiMenu, FiTruck, FiUser, FiUsers, FiX,
 } from 'react-icons/fi';
 
 const adminLinks = [
@@ -13,11 +13,12 @@ const adminLinks = [
   { href: '/dashboard/admin/usuarios', label: 'Usuarios', icon: FiUsers },
   { href: '/dashboard/admin/escuelas', label: 'Escuelas', icon: FiHome },
   { href: '/dashboard/admin/ingresos', label: 'Ingresos', icon: FiBarChart2 },
+  { href: '/dashboard/admin/historial', label: 'Historial', icon: FiClock },
 ];
 
 const conductorLinks = [
   { href: '/dashboard/conductor', label: 'Inicio', icon: FiGrid },
-  { href: '/dashboard/conductor/viajes', label: 'Rutas', icon: FiTruck },
+  { href: '/dashboard/conductor/viajes', label: 'Rutas y viajes', icon: FiTruck },
   { href: '/dashboard/conductor/estudiantes', label: 'Estudiantes', icon: FiUsers },
   { href: '/dashboard/conductor/pagos', label: 'Pagos', icon: FiCreditCard },
   { href: '/dashboard/conductor/perfil', label: 'Perfil', icon: FiUser },

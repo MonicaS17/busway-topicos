@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { FiBarChart2, FiDownload } from 'react-icons/fi';
 import { api } from '@/lib/api';
+import { exportToExcel, exportToPdf } from '@/lib/exportReports';
 
 export default function IngresosPage() {
   const [pagos, setPagos] = useState([]);
@@ -24,6 +25,16 @@ export default function IngresosPage() {
   const filtered = filterStatus === 'Todos'
     ? pagos
     : pagos.filter((p) => p.status === filterStatus);
+
+  const report = {
+    title: 'Historial general de ingresos',
+    columns: ['ID', 'Padre', 'Conductor', 'Monto', 'Mes', 'Fecha', 'Estado'],
+    rows: filtered.map((p) => [
+      String(p.id).slice(-6).toUpperCase(), p.padre, p.conductor, p.monto,
+      p.mesContrato || '—', p.fecha, p.status,
+    ]),
+    fileName: 'busway-ingresos',
+  };
 
   if (loading) {
     return (
@@ -56,11 +67,14 @@ export default function IngresosPage() {
         </div>
 
         <div className="mt-5 flex flex-wrap gap-3">
-          {['PDF', 'Excel'].map((format) => (
+          {[
+            ['PDF', () => exportToPdf(report)],
+            ['Excel', () => exportToExcel(report)],
+          ].map(([format, action]) => (
             <button
               key={format}
               type="button"
-              onClick={() => alert(`Exportar ${format} — conectar con la API`)}
+              onClick={() => action().catch((error) => alert(error.message))}
               className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-navy hover:border-busway-blue hover:bg-blue-50/50 transition"
             >
               <FiDownload size={15} />
@@ -74,7 +88,7 @@ export default function IngresosPage() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
           <h2 className="text-sm font-extrabold text-navy">Pagos recientes</h2>
           <div className="flex gap-2">
-            {['Todos', 'Exitoso', 'Fallido'].map((s) => (
+            {['Todos', 'Exitoso', 'Pendiente', 'Fallido'].map((s) => (
               <button
                 key={s}
                 type="button"
@@ -111,7 +125,11 @@ export default function IngresosPage() {
                   <td className="px-5 py-4">
                     <span className={[
                       'rounded-full px-3 py-1 text-xs font-bold',
-                      p.status === 'Exitoso' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700',
+                      p.status === 'Exitoso'
+                        ? 'bg-emerald-50 text-emerald-700'
+                        : p.status === 'Pendiente'
+                          ? 'bg-amber-50 text-amber-700'
+                          : 'bg-red-50 text-red-700',
                     ].join(' ')}>
                       {p.status}
                     </span>

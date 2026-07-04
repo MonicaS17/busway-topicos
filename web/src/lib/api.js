@@ -32,10 +32,14 @@ export const api = {
   eliminarEscuela: (id) =>
     apiFetch(`/api/escuelas/${id}`, { method: 'DELETE' }),
   getPagos: () => apiFetch('/api/pagos'),
+  getLogs: () => apiFetch('/api/admin/logs'),
+  getPerfil: () => apiFetch('/api/auth/perfil'),
   // Conductor
   getConductorPerfil: () => apiFetch('/api/conductor/perfil'),
   getConductorEstudiantes: () => apiFetch('/api/conductor/estudiantes'),
-  getConductorPagos: () => apiFetch('/api/pagos'),
+  getConductorRutas: () => apiFetch('/api/conductor/rutas'),
+  getConductorViajes: () => apiFetch('/api/conductor/viajes'),
+  getConductorPagos: () => apiFetch('/api/pagos/recibidos'),
   // Padre
   getPadreHijos: () => apiFetch('/api/padre/mis-hijos'),
   getPadrePagos: () => apiFetch('/api/pagos/mis-pagos'),

@@ -8,24 +8,21 @@ import { api } from '@/lib/api';
 export default function ConductorDashboard() {
   const [perfil, setPerfil] = useState(null);
   const [estudiantes, setEstudiantes] = useState([]);
+  const [rutas, setRutas] = useState([]);
+  const [pagos, setPagos] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([api.getConductorPerfil(), api.getConductorEstudiantes()])
-      .then(([perfilData, estudiantesData]) => {
+    Promise.all([api.getConductorPerfil(), api.getConductorEstudiantes(), api.getConductorRutas(), api.getConductorPagos()])
+      .then(([perfilData, estudiantesData, rutasData, pagosData]) => {
         setPerfil(perfilData);
         setEstudiantes(estudiantesData.estudiantes);
+        setRutas(rutasData.rutas);
+        setPagos(pagosData.pagos);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
-
-  // Agrupar estudiantes por ruta
-  const rutas = estudiantes.reduce((acc, est) => {
-    if (!acc[est.ruta]) acc[est.ruta] = { escuela: est.escuela, count: 0 };
-    acc[est.ruta].count++;
-    return acc;
-  }, {});
 
   const nombre = perfil?.usuario
     ? `${perfil.usuario.nombre} ${perfil.usuario.apellido}`
@@ -55,10 +52,10 @@ export default function ConductorDashboard() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
-        <StatsCard title="Rutas registradas" value={String(Object.keys(rutas).length)} icon={<FiTruck />} />
-        <StatsCard title="Escuelas" value={String(new Set(estudiantes.map(e => e.escuela)).size)} icon={<FiTruck />} color="#071634" />
+        <StatsCard title="Rutas registradas" value={String(rutas.length)} icon={<FiTruck />} />
+        <StatsCard title="Escuelas" value={String(new Set(rutas.map((ruta) => ruta.escuela).filter(Boolean)).size)} icon={<FiTruck />} color="#071634" />
         <StatsCard title="Estudiantes" value={String(estudiantes.length)} icon={<FiUsers />} color="#168FE3" />
-        <StatsCard title="Pagos al día" value="—" icon={<FiCreditCard />} color="#FFC20A" />
+        <StatsCard title="Pagos exitosos" value={String(pagos.filter((p) => p.status === 'Exitoso').length)} icon={<FiCreditCard />} color="#FFC20A" />
       </div>
 
       <section className="mt-6 rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -72,14 +69,14 @@ export default function ConductorDashboard() {
           </Link>
         </div>
         <div className="grid gap-4 p-5 md:grid-cols-2">
-          {Object.entries(rutas).map(([ruta, info]) => (
-            <article key={ruta} className="rounded-md border border-slate-200 p-4">
-              <h3 className="text-sm font-extrabold text-navy">{ruta}</h3>
-              <p className="mt-1 text-xs text-slate-500">{info.escuela}</p>
-              <p className="mt-3 text-sm font-bold text-busway-blue">{info.count} estudiantes</p>
+          {rutas.map((ruta) => (
+            <article key={ruta._id} className="rounded-md border border-slate-200 p-4">
+              <h3 className="text-sm font-extrabold text-navy">{ruta.nombre}</h3>
+              <p className="mt-1 text-xs text-slate-500">{ruta.escuela || 'Sin escuela registrada'}{ruta.zona ? ` · ${ruta.zona}` : ''}</p>
+              <p className="mt-3 text-sm font-bold text-busway-blue">{ruta.frecuencia || '—'}</p>
             </article>
           ))}
-          {Object.keys(rutas).length === 0 && (
+          {rutas.length === 0 && (
             <p className="text-sm text-slate-400">No tienes rutas asignadas aún.</p>
           )}
         </div>

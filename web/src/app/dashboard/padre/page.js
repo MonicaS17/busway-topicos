@@ -12,13 +12,9 @@ export default function PadreDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('busway_usuario');
-      if (raw) setUsuario(JSON.parse(raw));
-    } catch {}
-
-    Promise.all([api.getPadreHijos(), api.getPadrePagos()])
-      .then(([hijosData, pagosData]) => {
+    Promise.all([api.getPerfil(), api.getPadreHijos(), api.getPadrePagos()])
+      .then(([perfilData, hijosData, pagosData]) => {
+        setUsuario(perfilData.usuario);
         setHijos(hijosData.hijos);
         setPagos(pagosData.pagos);
       })
@@ -91,9 +87,16 @@ export default function PadreDashboard() {
                 <tr key={p.id} className="hover:bg-slate-50">
                   <td className="px-5 py-4 text-slate-600">{p.fecha}</td>
                   <td className="px-5 py-4 font-extrabold text-navy">{p.monto}</td>
-                  <td className="px-5 py-4 text-slate-600">{p.detalle}</td>
+                  <td className="px-5 py-4 text-slate-600">Mes {p.mesContrato} · {p.conductor}</td>
                   <td className="px-5 py-4">
-                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+                    <span className={[
+                      'rounded-full px-3 py-1 text-xs font-bold',
+                      p.estado === 'Exitoso'
+                        ? 'bg-emerald-50 text-emerald-700'
+                        : p.estado === 'Pendiente'
+                          ? 'bg-amber-50 text-amber-700'
+                          : 'bg-red-50 text-red-700',
+                    ].join(' ')}>
                       {p.estado}
                     </span>
                   </td>

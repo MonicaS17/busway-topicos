@@ -18,6 +18,10 @@ const pagosRoutes = require('./routes/pagos');
 
 // socketHandler para manejar eventos de Socket.IO (asistencia y GPS)
 const socketHandler = require('./sockets/socketHandler');
+const conductorRoutes = require('./routes/conductor'); // <-- ¡Limpiado aquí! Ya no necesita el { router: ... }
+const padreRoutes = require('./routes/padres');
+const adminRoutes = require('./routes/admin');
+const notificacionesRoutes = require('./routes/notificaciones');
 
 const app = express();
 
@@ -42,6 +46,10 @@ app.use('/api/conductor', conductorRoutes);
 app.use('/api/padre', padresRoutes);
 app.use('/api/escuelas', escuelasRoutes);
 app.use('/api/pagos', pagosRoutes);
+app.use('/api/conductor', conductorRoutes);
+app.use('/api/padre', padreRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/notificaciones', notificacionesRoutes);
 
 // Ruta de prueba
 app.get('/', (req, res) => {

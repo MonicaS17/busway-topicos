@@ -44,13 +44,11 @@ export default function PadrePerfilPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('busway_usuario');
-      if (raw) setUsuario(JSON.parse(raw));
-    } catch {}
-
-    api.getPadreHijos()
-      .then((data) => setHijos(data.hijos))
+    Promise.all([api.getPerfil(), api.getPadreHijos()])
+      .then(([perfilData, hijosData]) => {
+        setUsuario(perfilData.usuario);
+        setHijos(hijosData.hijos);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
@@ -103,12 +101,14 @@ export default function PadrePerfilPage() {
                 hijos.map((h) => (
                   <div key={h._id} className="rounded-md border border-slate-200 px-4 py-3">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="font-extrabold text-navy">{h.nombre} {h.apellido}</p>
+                      <p className="font-extrabold text-navy">{h.nombre}</p>
                       <span className="rounded-full bg-busway-yellow px-2.5 py-1 text-[11px] font-extrabold text-navy">
                         {h.estado}
                       </span>
                     </div>
-                    <p className="mt-1 text-xs text-slate-500">{h.escuela}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {h.conductor_id ? `Conductor: ${h.conductor_id.nombre} ${h.conductor_id.apellido}` : 'Sin conductor asignado'}
+                    </p>
                   </div>
                 ))
               )}

@@ -12,12 +12,14 @@ export default function UsuariosPage() {
   useEffect(() => {
     api.getUsuarios()
       .then((data) => {
-        const mapeados = data.usuarios.map((u) => ({
+        const mapeados = data.usuarios
+          .filter((u) => ['conductor', 'padre'].includes(u.tipo))
+          .map((u) => ({
           id: u._id,
           nombre: `${u.nombre} ${u.apellido}`,
           email: u.correo,
           rol: u.tipo === 'conductor' ? 'Conductor' : u.tipo === 'padre' ? 'Padre' : 'Admin',
-          status: u.estado === 'activo' ? 'Activo' : 'Bloqueado',
+          status: u.estado.charAt(0).toUpperCase() + u.estado.slice(1),
           fecha: new Date(u.fecha_registro).toLocaleDateString('es-PA'),
         }));
         setUsers(mapeados);

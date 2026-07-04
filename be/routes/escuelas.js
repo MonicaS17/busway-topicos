@@ -1,20 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const mongoose = require('mongoose');
 const verifyToken = require('../middleware/verifyToken');
+const Escuela = require('../models/Escuela');
+const requireRole = require('../middleware/requireRole');
 
-const escuelaSchema = new mongoose.Schema({
-  nombre: { type: String, required: true },
-  distrito: { type: String, required: true },
-  rutas: { type: Number, default: 0 },
-  conductores: { type: Number, default: 0 },
-  estado: { type: String, default: 'Activa' },
-  fecha_registro: { type: Date, default: Date.now },
-});
+router.use(verifyToken, requireRole('administrador'));
 
-const Escuela = mongoose.model('escuelas', escuelaSchema);
-
-// GET todas las escuelas activas (público)
+// GET todas las escuelas
 router.get('/', async (req, res) => {
   try {
     const escuelas = await Escuela.find({
@@ -27,7 +19,7 @@ router.get('/', async (req, res) => {
 });
 
 // POST crear escuela
-router.post('/', verifyToken, async (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { nombre, distrito } = req.body;
     if (!nombre || !distrito) {
@@ -42,9 +34,10 @@ router.post('/', verifyToken, async (req, res) => {
 });
 
 // DELETE eliminar escuela
-router.delete('/:id', verifyToken, async (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
-    await Escuela.findByIdAndDelete(req.params.id);
+    const escuela = await Escuela.findByIdAndDelete(req.params.id);
+    if (!escuela) return res.status(404).json({ error: 'Escuela no encontrada' });
     res.json({ mensaje: 'Escuela eliminada' });
   } catch (error) {
     res.status(500).json({ error: 'Error interno del servidor' });

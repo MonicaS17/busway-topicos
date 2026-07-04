@@ -3,6 +3,8 @@ const router = express.Router();
 const verifyToken = require('../middleware/verifyToken');
 const Usuario = require('../models/Usuario');
 const Vehiculo = require('../models/Vehiculo');
+const Log = require('../models/Log');
+const requireRole = require('../middleware/requireRole');
 
 //VALIDACIONES BACKEND 
 const validarCedula = (cedula) => {
@@ -165,7 +167,7 @@ router.get('/perfil', verifyToken, async (req, res) => {
 });
 
 //LISTA DE USUARIOS
-router.get('/usuarios', verifyToken, async (req, res) => {
+router.get('/usuarios', verifyToken, requireRole('administrador'), async (req, res) => {
   try {
     const usuarios = await Usuario.find();
     res.json({ usuarios });
@@ -175,15 +177,23 @@ router.get('/usuarios', verifyToken, async (req, res) => {
 });
 
 // PATCH cambiar estado de usuario
-router.patch('/usuarios/:id/estado', verifyToken, async (req, res) => {
+router.patch('/usuarios/:id/estado', verifyToken, requireRole('administrador'), async (req, res) => {
   try {
     const { estado } = req.body;
-    const usuario = await Usuario.findByIdAndUpdate(
-      req.params.id,
+    if (!['activo', 'bloqueado'].includes(estado)) {
+      return res.status(400).json({ error: 'Estado de cuenta inválido' });
+    }
+    const usuario = await Usuario.findOneAndUpdate(
+      { _id: req.params.id, tipo: { $in: ['conductor', 'padre'] } },
       { estado },
       { new: true }
     );
-    if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' });
+    if (!usuario) return res.status(404).json({ error: 'Cuenta de conductor o padre no encontrada' });
+    await Log.create({
+      tipo: estado === 'bloqueado' ? 'bloqueo' : 'activacion',
+      usuario_id: usuario._id,
+      descripcion: `${req.usuario.nombre} ${req.usuario.apellido} cambió el estado de la cuenta a ${estado}`,
+    });
     res.json({ mensaje: 'Estado actualizado', usuario });
   } catch (error) {
     res.status(500).json({ error: 'Error interno del servidor' });

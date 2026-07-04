@@ -1,97 +1,198 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
   StyleSheet, StatusBar, Alert, KeyboardAvoidingView, Platform,
+  RefreshControl, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { auth } from '../config/firebase';
+import api from '../config/api';
 
 const MENSAJES_PREDEFINIDOS = [
-  { id: 1, icono: 'car-outline',         texto: 'Tráfico en la vía — retraso aprox. 10 min' },
-  { id: 2, icono: 'construct-outline',   texto: 'El bus tiene una falla mecánica — servicio suspendido hoy' },
-  { id: 3, icono: 'time-outline',        texto: 'Llegaré 15 minutos tarde al punto de recogida' },
+  { id: 1, icono: 'car-outline', texto: 'Tráfico en la vía - retraso aproximado de 10 minutos' },
+  { id: 2, icono: 'construct-outline', texto: 'El bus presenta una falla mecánica - servicio suspendido por hoy' },
+  { id: 3, icono: 'time-outline', texto: 'Llegaré 15 minutos tarde al punto de recogida' },
   { id: 4, icono: 'checkmark-circle-outline', texto: 'El bus ya está en camino, todo en orden' },
-  { id: 5, icono: 'cloud-outline',       texto: 'Por lluvia intensa, la ruta tendrá retraso' },
-  { id: 6, icono: 'close-circle-outline',texto: 'Ruta cancelada por el día de hoy' },
+  { id: 5, icono: 'cloud-outline', texto: 'Por lluvia intensa, la ruta tendrá retraso' },
+  { id: 6, icono: 'close-circle-outline', texto: 'Ruta cancelada por el día de hoy' },
 ];
 
-export default function NotificacionesConductorScreen({ navigation, route }) {
-  const { usuario } = route.params;
+const AUDIENCIAS = [
+  {
+    key: 'todos',
+    titulo: 'Todos',
+    subtitulo: 'Padres vinculados a tu ruta',
+    icono: 'people-outline',
+  },
+  {
+    key: 'asistentes',
+    titulo: 'Asistentes',
+    subtitulo: 'Solo asistentes de hoy',
+    icono: 'alert-circle-outline',
+  },
+  {
+    key: 'individual',
+    titulo: 'Individual',
+    subtitulo: 'Un padre con hijo asistente',
+    icono: 'person-outline',
+  },
+];
+
+function formatearFecha(fecha) {
+  if (!fecha) return 'Sin fecha';
+  return new Date(fecha).toLocaleString('es-PA', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+export default function NotificacionesConductorScreen({ navigation }) {
+  const formularioRef = useRef(null);
   const [mensaje, setMensaje] = useState('');
   const [seleccionado, setSeleccionado] = useState(null);
+  const [audiencia, setAudiencia] = useState('todos');
   const [enviando, setEnviando] = useState(false);
-  const [tab, setTab] = useState('enviar'); // 'enviar' | 'historial'
+  const [cargando, setCargando] = useState(true);
+  const [refrescando, setRefrescando] = useState(false);
+  const [tab, setTab] = useState('enviar');
+  const [historial, setHistorial] = useState([]);
+  const [asistentes, setAsistentes] = useState([]);
+  const [estudianteSeleccionado, setEstudianteSeleccionado] = useState(null);
+  const [cargandoAsistentes, setCargandoAsistentes] = useState(false);
 
-  // Historial local de ejemplo — reemplazar con llamada a Firestore
-  const [historial] = useState([
-    {
-      id: 'h1',
-      texto: 'Tráfico en la vía — retraso aprox. 10 min',
-      fecha: '11 jun 2026, 7:42 a.m.',
-      padresEnviados: 8,
-    },
-    {
-      id: 'h2',
-      texto: 'El bus ya está en camino, todo en orden',
-      fecha: '10 jun 2026, 6:58 a.m.',
-      padresEnviados: 8,
-    },
-    {
-      id: 'h3',
-      texto: 'Por lluvia intensa, la ruta tendrá retraso',
-      fecha: '9 jun 2026, 7:15 a.m.',
-      padresEnviados: 7,
-    },
-  ]);
+  const cargarHistorial = useCallback(async (mostrarCarga = false) => {
+    if (mostrarCarga) setCargando(true);
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const response = await api.get('/api/notificaciones/conductor/historial', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setHistorial(response.data.notificaciones || []);
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.error || 'No se pudo cargar el historial.');
+    } finally {
+      setCargando(false);
+      setRefrescando(false);
+    }
+  }, []);
 
-  const seleccionarPredefinido = (item) => {
-    if (seleccionado?.id === item.id) {
-      // Deseleccionar
-      setSeleccionado(null);
-      setMensaje('');
-    } else {
-      setSeleccionado(item);
-      setMensaje(item.texto);
+  useEffect(() => {
+    cargarHistorial(true);
+  }, [cargarHistorial]);
+
+  const cargarAsistentes = useCallback(async () => {
+    setCargandoAsistentes(true);
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const response = await api.get('/api/notificaciones/conductor/asistentes', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const lista = response.data.asistentes || [];
+      setAsistentes(lista);
+      return lista;
+    } catch (error) {
+      setAsistentes([]);
+      Alert.alert('Error', error.response?.data?.error || 'No se pudieron cargar los asistentes.');
+      return null;
+    } finally {
+      setCargandoAsistentes(false);
+    }
+  }, []);
+
+  const seleccionarAudiencia = async (tipo) => {
+    setAudiencia(tipo);
+    setEstudianteSeleccionado(null);
+
+    if (tipo === 'asistentes' || tipo === 'individual') {
+      const lista = await cargarAsistentes();
+      if (lista && lista.length === 0) {
+        const mensaje = tipo === 'individual'
+          ? 'No se encuentran estudiantes a bordo para enviar un mensaje de emergencia.'
+          : 'No se encontraron estudiantes a bordo para enviar el aviso.';
+        Alert.alert('Sin estudiantes a bordo', mensaje);
+      }
     }
   };
 
-  const handleEnviar = async () => {
+  const seleccionarPredefinido = (item) => {
+    if (seleccionado?.id === item.id) {
+      setSeleccionado(null);
+      setMensaje('');
+      return;
+    }
+    setSeleccionado(item);
+    setMensaje(item.texto);
+  };
+
+  const enviarNotificacion = async () => {
+    setEnviando(true);
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const response = await api.post(
+        '/api/notificaciones/conductor/enviar',
+        {
+          mensaje: mensaje.trim(),
+          audiencia,
+          estudiante_id: audiencia === 'individual' ? estudianteSeleccionado : undefined,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      Alert.alert(
+        'Aviso enviado',
+        `La notificación quedó guardada y fue enviada dentro de la app a ${response.data.enviados} padre(s).`
+      );
+      setMensaje('');
+      setSeleccionado(null);
+      setEstudianteSeleccionado(null);
+      await cargarHistorial();
+      setTab('historial');
+    } catch (error) {
+      Alert.alert('No se pudo enviar', error.response?.data?.error || 'Intenta de nuevo.');
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  const handleEnviar = () => {
     if (!mensaje.trim()) {
       Alert.alert('Mensaje vacío', 'Escribe o selecciona un mensaje antes de enviar.');
       return;
     }
+    if (audiencia === 'individual' && !estudianteSeleccionado) {
+      Alert.alert('Selecciona un estudiante', 'Elige al hijo asistente cuyo padre recibira la emergencia.');
+      return;
+    }
+
+    const asistente = asistentes.find((item) => item._id === estudianteSeleccionado);
+    const destino = audiencia === 'todos'
+      ? 'todos los padres vinculados a tu ruta'
+      : audiencia === 'asistentes'
+        ? 'los padres de los estudiantes asistentes de hoy'
+        : `el padre de ${asistente?.nombre || 'el estudiante seleccionado'}`;
+
     Alert.alert(
       'Confirmar envío',
-      `Se enviará a todos tus padres vinculados:\n\n"${mensaje}"`,
+      `Se enviará a ${destino}:\n\n"${mensaje.trim()}"`,
       [
         { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Enviar',
-          onPress: async () => {
-            setEnviando(true);
-            try {
-              // TODO: llamar a tu Cloud Function / FCM
-              // await sendNotificationToParents(usuario.uid, mensaje);
-              await new Promise((r) => setTimeout(r, 1200)); // simulación
-              Alert.alert('✅ Enviado', 'La notificación fue enviada a todos tus padres vinculados.');
-              setMensaje('');
-              setSeleccionado(null);
-            } catch {
-              Alert.alert('Error', 'No se pudo enviar la notificación. Intenta de nuevo.');
-            } finally {
-              setEnviando(false);
-            }
-          },
-        },
+        { text: 'Enviar', onPress: enviarNotificacion },
       ]
     );
+  };
+
+  const refrescar = () => {
+    setRefrescando(true);
+    cargarHistorial();
   };
 
   return (
     <SafeAreaView style={s.container} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor="#0D1B3E" />
 
-      {/* ── Header ── */}
       <View style={s.header}>
         <TouchableOpacity style={s.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
           <Ionicons name="arrow-back-outline" size={20} color="#0D1B3E" />
@@ -100,16 +201,13 @@ export default function NotificacionesConductorScreen({ navigation, route }) {
           <Text style={s.headerSub}>BusWay</Text>
           <Text style={s.headerTitle}>Notificaciones</Text>
         </View>
-        <View style={s.headerIconCircle}>
-          <Ionicons name="notifications-outline" size={22} color="#FFD700" />
-        </View>
+        <View style={s.headerSpacer} />
       </View>
 
-      {/* ── Tabs ── */}
       <View style={s.card}>
         <View style={s.tabs}>
           {[
-            { key: 'enviar',    label: 'Enviar aviso' },
+            { key: 'enviar', label: 'Enviar aviso' },
             { key: 'historial', label: 'Historial' },
           ].map((t) => (
             <TouchableOpacity
@@ -123,19 +221,82 @@ export default function NotificacionesConductorScreen({ navigation, route }) {
           ))}
         </View>
 
-        {/* ── TAB: ENVIAR ── */}
         {tab === 'enviar' && (
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
             style={{ flex: 1 }}
           >
             <ScrollView
+              ref={formularioRef}
               contentContainerStyle={s.body}
               keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
               showsVerticalScrollIndicator={false}
             >
-              {/* Predefinidos */}
-              <Text style={s.sectionTitle}>Mensajes rápidos</Text>
+              <Text style={s.sectionTitle}>Enviar a</Text>
+              <View style={s.audienceGrid}>
+                {AUDIENCIAS.map((item) => {
+                  const activo = audiencia === item.key;
+                  return (
+                    <TouchableOpacity
+                      key={item.key}
+                      style={[s.audienceCard, activo && s.audienceCardActive]}
+                      onPress={() => seleccionarAudiencia(item.key)}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons name={item.icono} size={20} color={activo ? '#0D1B3E' : '#00AEEF'} />
+                      <Text style={[s.audienceTitle, activo && s.audienceTitleActive]}>{item.titulo}</Text>
+                      <Text style={s.audienceSub}>{item.subtitulo}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {audiencia === 'individual' && (
+                <View style={s.recipientSection}>
+                  <View style={s.recipientHeader}>
+                    <View>
+                      <Text style={s.sectionTitle}>Seleccionar estudiante</Text>
+                    </View>
+                    <TouchableOpacity style={s.refreshBtn} onPress={cargarAsistentes} disabled={cargandoAsistentes}>
+                      <Ionicons name="refresh-outline" size={18} color="#0D1B3E" />
+                    </TouchableOpacity>
+                  </View>
+                  {cargandoAsistentes && <ActivityIndicator color="#00AEEF" />}
+                  {!cargandoAsistentes && asistentes.length === 0 && (
+                    <Text style={s.noRecipients}>No se encuentran estudiantes hoy.</Text>
+                  )}
+                  {!cargandoAsistentes && asistentes.map((item) => {
+                    const activo = estudianteSeleccionado === item._id;
+                    const nombrePadre = `${item.padre?.nombre || ''} ${item.padre?.apellido || ''}`.trim();
+                    return (
+                      <TouchableOpacity
+                        key={item._id}
+                        style={[s.recipientRow, activo && s.recipientRowActive]}
+                        onPress={() => setEstudianteSeleccionado(item._id)}
+                        activeOpacity={0.8}
+                      >
+                        <View style={s.recipientIcon}>
+                          <Ionicons name="person-outline" size={18} color="#00AEEF" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={s.recipientName}>{item.nombre}</Text>
+                          <Text style={s.recipientParent}>Padre: {nombrePadre || 'Sin nombre'}</Text>
+                        </View>
+                        <Ionicons
+                          name={activo ? 'radio-button-on' : 'radio-button-off'}
+                          size={20}
+                          color={activo ? '#FFD700' : '#AAB4C3'}
+                        />
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+
+              <Text style={[s.sectionTitle, { marginTop: 22 }]}>Mensajes rápidos</Text>
               <Text style={s.sectionSub}>Toca uno para usarlo como base</Text>
 
               {MENSAJES_PREDEFINIDOS.map((item) => {
@@ -153,14 +314,11 @@ export default function NotificacionesConductorScreen({ navigation, route }) {
                     <Text style={[s.predTexto, activo && s.predTextoActive]} numberOfLines={2}>
                       {item.texto}
                     </Text>
-                    {activo && (
-                      <Ionicons name="checkmark-circle" size={18} color="#FFD700" style={{ marginLeft: 4 }} />
-                    )}
+                    {activo && <Ionicons name="checkmark-circle" size={18} color="#FFD700" />}
                   </TouchableOpacity>
                 );
               })}
 
-              {/* Mensaje personalizado */}
               <Text style={[s.sectionTitle, { marginTop: 24 }]}>Mensaje personalizado</Text>
               <Text style={s.sectionSub}>Edita el mensaje rápido o redacta uno nuevo</Text>
 
@@ -168,71 +326,103 @@ export default function NotificacionesConductorScreen({ navigation, route }) {
                 <TextInput
                   style={s.input}
                   placeholder="Ej: El bus saldrá 5 minutos tarde hoy..."
-                  placeholderTextColor="#bbb"
+                  placeholderTextColor="#9AA4B2"
                   multiline
-                  maxLength={300}
+                  maxLength={500}
                   value={mensaje}
+                  onFocus={() => {
+                    setTimeout(() => {
+                      formularioRef.current?.scrollToEnd({ animated: true });
+                    }, 250);
+                  }}
                   onChangeText={(t) => {
                     setMensaje(t);
                     if (seleccionado && t !== seleccionado.texto) setSeleccionado(null);
                   }}
                   textAlignVertical="top"
                 />
-                <Text style={s.charCount}>{mensaje.length}/300</Text>
+                <Text style={s.charCount}>{mensaje.length}/500</Text>
               </View>
 
-              {/* Info */}
-              <View style={s.infoRow}>
-                <Ionicons name="information-circle-outline" size={15} color="#00AEEF" />
-                <Text style={s.infoText}>
-                  Solo se notificará a padres cuyos hijos tienen asistencia activa hoy.
-                </Text>
-              </View>
-
-              {/* Botón enviar */}
               <TouchableOpacity
-                style={[s.btnEnviar, (!mensaje.trim() || enviando) && s.btnEnviarDisabled]}
+                style={[
+                  s.btnEnviar,
+                  (
+                    !mensaje.trim()
+                    || enviando
+                    || cargandoAsistentes
+                    || (audiencia === 'asistentes' && asistentes.length === 0)
+                    || (audiencia === 'individual' && !estudianteSeleccionado)
+                  ) && s.btnEnviarDisabled,
+                ]}
                 onPress={handleEnviar}
-                disabled={!mensaje.trim() || enviando}
+                disabled={
+                  !mensaje.trim()
+                  || enviando
+                  || cargandoAsistentes
+                  || (audiencia === 'asistentes' && asistentes.length === 0)
+                  || (audiencia === 'individual' && !estudianteSeleccionado)
+                }
                 activeOpacity={0.85}
               >
-                {enviando
-                  ? <Text style={s.btnEnviarText}>Enviando...</Text>
-                  : (
-                    <>
-                      <Ionicons name="send-outline" size={18} color="#0D1B3E" style={{ marginRight: 8 }} />
-                      <Text style={s.btnEnviarText}>Enviar a todos los padres</Text>
-                    </>
-                  )}
+                {enviando ? (
+                  <ActivityIndicator color="#0D1B3E" />
+                ) : (
+                  <>
+                    <Ionicons name="send-outline" size={18} color="#0D1B3E" style={{ marginRight: 8 }} />
+                    <Text style={s.btnEnviarText}>
+                      {audiencia === 'individual' ? 'Enviar emergencia' : 'Enviar aviso'}
+                    </Text>
+                  </>
+                )}
               </TouchableOpacity>
             </ScrollView>
           </KeyboardAvoidingView>
         )}
 
-        {/* ── TAB: HISTORIAL ── */}
         {tab === 'historial' && (
-          <ScrollView contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            contentContainerStyle={s.body}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={refrescando} onRefresh={refrescar} />}
+          >
             <Text style={s.sectionTitle}>Avisos enviados</Text>
-            <Text style={s.sectionSub}>Registro de notificaciones enviadas</Text>
+            <Text style={s.sectionSub}>Registro guardado en la base de datos</Text>
 
-            {historial.length === 0 && (
+            {cargando && (
+              <View style={s.loadingBox}>
+                <ActivityIndicator color="#00AEEF" />
+                <Text style={s.loadingText}>Cargando historial...</Text>
+              </View>
+            )}
+
+            {!cargando && historial.length === 0 && (
               <View style={s.emptyBox}>
-                <Ionicons name="notifications-off-outline" size={40} color="#ccc" />
+                <Ionicons name="notifications-off-outline" size={40} color="#C8D6E5" />
                 <Text style={s.emptyText}>Aún no has enviado ningún aviso</Text>
               </View>
             )}
 
-            {historial.map((h) => (
-              <View key={h.id} style={s.histCard}>
-                <View style={s.histLeft}>
-                  <Ionicons name="send-outline" size={18} color="#00AEEF" />
+            {!cargando && historial.map((h) => (
+              <View key={h._id} style={s.histCard}>
+                <View style={[s.histLeft, h.audiencia !== 'todos' && s.histLeftEmergency]}>
+                  <Ionicons
+                    name={h.audiencia !== 'todos' ? 'alert-circle-outline' : 'send-outline'}
+                    size={18}
+                    color={h.audiencia !== 'todos' ? '#DC2626' : '#00AEEF'}
+                  />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.histTexto}>{h.texto}</Text>
+                  <View style={s.histTitleRow}>
+                    <Text style={s.histTipo}>
+                      {h.audiencia === 'individual' ? 'Emergencia individual' : h.audiencia === 'asistentes' ? 'Aviso a asistentes' : 'Aviso general'}
+                    </Text>
+                    <Text style={s.histPadres}>{h.enviados || h.destinatarios?.length || 0} padres</Text>
+                  </View>
+                  <Text style={s.histTexto}>{h.mensaje}</Text>
                   <View style={s.histMeta}>
-                    <Ionicons name="time-outline" size={12} color="#aaa" />
-                    <Text style={s.histFecha}>{h.fecha}</Text>
-                    <Text style={s.histPadres}>· {h.padresEnviados} padres</Text>
+                    <Ionicons name="time-outline" size={12} color="#9AA4B2" />
+                    <Text style={s.histFecha}>{formatearFecha(h.fecha)}</Text>
                   </View>
                 </View>
               </View>
@@ -246,8 +436,6 @@ export default function NotificacionesConductorScreen({ navigation, route }) {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0D1B3E' },
-
-  // Header
   header: {
     backgroundColor: '#0D1B3E',
     flexDirection: 'row',
@@ -264,19 +452,11 @@ const s = StyleSheet.create({
   },
   headerSub: { color: 'rgba(255,255,255,0.5)', fontSize: 11, textAlign: 'center' },
   headerTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold', textAlign: 'center' },
-  headerIconCircle: {
-    width: 40, height: 40, borderRadius: 13,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-
-  // Card base
+  headerSpacer: { width: 40, height: 40 },
   card: {
     flex: 1, backgroundColor: '#fff',
     borderTopLeftRadius: 28, borderTopRightRadius: 28,
   },
-
-  // Tabs
   tabs: {
     flexDirection: 'row',
     marginHorizontal: '6%',
@@ -291,16 +471,35 @@ const s = StyleSheet.create({
     borderRadius: 11, alignItems: 'center',
   },
   tabItemActive: { backgroundColor: '#fff', shadowColor: '#0D1B3E', shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
-  tabLabel: { fontSize: 13, color: '#aaa', fontWeight: '600' },
+  tabLabel: { fontSize: 13, color: '#8A94A6', fontWeight: '600' },
   tabLabelActive: { color: '#0D1B3E', fontWeight: '700' },
-
-  // Body scroll
   body: { paddingHorizontal: '6%', paddingTop: 20, paddingBottom: 32 },
-
   sectionTitle: { fontSize: 14, fontWeight: '700', color: '#0D1B3E', textTransform: 'uppercase', letterSpacing: 0.5 },
-  sectionSub: { fontSize: 12, color: '#aaa', marginTop: 2, marginBottom: 14 },
-
-  // Predefinidos
+  sectionSub: { fontSize: 12, color: '#8A94A6', marginTop: 2, marginBottom: 14 },
+  audienceGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12 },
+  audienceCard: {
+    width: '48%',
+    minHeight: 104,
+    backgroundColor: '#F5F8FC',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#E3ECF7',
+    padding: 12,
+    justifyContent: 'center',
+  },
+  audienceCardActive: { backgroundColor: '#FFFBEA', borderColor: '#FFD700' },
+  audienceTitle: { fontSize: 13, fontWeight: '700', color: '#0D1B3E', marginTop: 8 },
+  audienceTitleActive: { color: '#0D1B3E' },
+  audienceSub: { fontSize: 11, color: '#8A94A6', lineHeight: 15, marginTop: 3 },
+  recipientSection: { marginTop: 20 },
+  recipientHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  refreshBtn: { width: 36, height: 36, borderRadius: 8, backgroundColor: '#FFD700', alignItems: 'center', justifyContent: 'center' },
+  noRecipients: { color: '#8A94A6', fontSize: 13, paddingVertical: 12 },
+  recipientRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1.5, borderColor: '#E3ECF7', borderRadius: 12, padding: 12, marginBottom: 8 },
+  recipientRowActive: { borderColor: '#FFD700', backgroundColor: '#FFFBEA' },
+  recipientIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#EFF8FF', alignItems: 'center', justifyContent: 'center' },
+  recipientName: { color: '#0D1B3E', fontSize: 13, fontWeight: '700' },
+  recipientParent: { color: '#8A94A6', fontSize: 11, marginTop: 2 },
   predCard: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: '#F5F8FC',
@@ -314,37 +513,26 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: '#E3ECF7',
   },
   predIconActive: { backgroundColor: '#FFD700', borderColor: '#FFD700' },
-  predTexto: { flex: 1, fontSize: 13, color: '#444', lineHeight: 18 },
+  predTexto: { flex: 1, fontSize: 13, color: '#3F4A5A', lineHeight: 18 },
   predTextoActive: { color: '#0D1B3E', fontWeight: '600' },
-
-  // Input
   inputBox: {
     backgroundColor: '#F5F8FC',
     borderRadius: 16, borderWidth: 1.5, borderColor: '#E3ECF7',
-    padding: 14, minHeight: 110,
+    padding: 14, minHeight: 120,
   },
-  input: { fontSize: 14, color: '#0D1B3E', lineHeight: 20, flex: 1, minHeight: 80 },
-  charCount: { fontSize: 11, color: '#ccc', textAlign: 'right', marginTop: 6 },
-
-  // Info
-  infoRow: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 6,
-    marginTop: 12, marginBottom: 24,
-    backgroundColor: '#EFF8FF', borderRadius: 12,
-    padding: 12,
-  },
-  infoText: { flex: 1, fontSize: 12, color: '#00AEEF', lineHeight: 17 },
-
-  // Botón enviar
+  input: { fontSize: 14, color: '#0D1B3E', lineHeight: 20, flex: 1, minHeight: 88 },
+  charCount: { fontSize: 11, color: '#9AA4B2', textAlign: 'right', marginTop: 6 },
   btnEnviar: {
+    minHeight: 52,
     backgroundColor: '#FFD700', borderRadius: 16,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     paddingVertical: 16,
+    marginTop: 24,
   },
   btnEnviarDisabled: { opacity: 0.45 },
   btnEnviarText: { fontSize: 15, fontWeight: '700', color: '#0D1B3E' },
-
-  // Historial
+  loadingBox: { alignItems: 'center', paddingTop: 48, gap: 10 },
+  loadingText: { color: '#8A94A6', fontSize: 13 },
   histCard: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 12,
     backgroundColor: '#F5F8FC', borderRadius: 14,
@@ -355,12 +543,13 @@ const s = StyleSheet.create({
     width: 36, height: 36, borderRadius: 18,
     backgroundColor: '#EFF8FF', alignItems: 'center', justifyContent: 'center',
   },
-  histTexto: { fontSize: 13, color: '#0D1B3E', fontWeight: '600', lineHeight: 18, marginBottom: 6 },
+  histLeftEmergency: { backgroundColor: '#FEECEC' },
+  histTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5, gap: 8 },
+  histTipo: { fontSize: 11, color: '#00AEEF', fontWeight: '700', textTransform: 'uppercase' },
+  histTexto: { fontSize: 13, color: '#0D1B3E', fontWeight: '600', lineHeight: 18, marginBottom: 8 },
   histMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  histFecha: { fontSize: 11, color: '#aaa' },
-  histPadres: { fontSize: 11, color: '#00AEEF', fontWeight: '600' },
-
-  // Empty
+  histFecha: { fontSize: 11, color: '#8A94A6' },
+  histPadres: { fontSize: 11, color: '#0D1B3E', fontWeight: '700' },
   emptyBox: { alignItems: 'center', paddingTop: 48, gap: 12 },
-  emptyText: { fontSize: 14, color: '#ccc' },
+  emptyText: { fontSize: 14, color: '#8A94A6' },
 });
