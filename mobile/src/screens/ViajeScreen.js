@@ -290,7 +290,7 @@ function ViajeConductor({ usuario, navigation, bottomInset }) {
           <Text style={styles.heroTitle}>¿Listo para iniciar?</Text>
           <Text style={styles.heroDesc}>
             Pasa lista de asistencia antes de iniciar el recorrido.
-            El GPS se activará cuando presiones "Iniciar Ruta".
+            El GPS se activará cuando presiones &quot;Iniciar Ruta&quot;.
           </Text>
         </View>
 
