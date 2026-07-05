@@ -5,37 +5,27 @@ const Estudiante = require('../models/Estudiante');
 // Filtra ÚNICAMENTE por estado: 'activo'. Si no existe → 404 limpio.
 exports.getViajeActivoConductor = async (req, res) => {
   try {
-    const viajeActivo = await Viaje.findOne({
-      conductor_id: req.user.id,
-      estado: 'activo'          // filtro estricto
-    });
-
-    if (viajeActivo) {
-      return res.json({ viaje: viajeActivo, fase: 'activo' });
+    const Ruta = require('../models/Ruta');
+    const ruta = await Ruta.findOne({ conductor_id: req.user.id });
+    if (!ruta) {
+      return res.status(404).json({ error: 'Ruta no asignada a este conductor.' });
     }
 
-    // Si no hay viaje activo, verificar si ya se completó la ida hoy
-    const inicioDia = new Date();
-    inicioDia.setHours(0, 0, 0, 0);
+    const { calcularFaseRuta } = require('../utils/viajeHelper');
+    const fase = await calcularFaseRuta(ruta._id);
 
-    const viajeIdaHoy = await Viaje.findOne({
-      conductor_id: req.user.id,
-      estado: 'finalizado',
-      tipo_viaje: 'ida',
-      createdAt: { $gte: inicioDia }
-    });
-
-    const viajeVueltaHoy = await Viaje.findOne({
-      conductor_id: req.user.id,
-      tipo_viaje: 'vuelta',
-      createdAt: { $gte: inicioDia }
-    });
-
-    if (viajeIdaHoy && !viajeVueltaHoy) {
-      return res.json({ viaje: null, fase: 'entre_viajes' });
+    let viajeActivo = null;
+    if (fase === 'en_curso') {
+      viajeActivo = await Viaje.findOne({
+        ruta_id: ruta._id,
+        estado: 'activo'
+      });
     }
 
-    return res.json({ viaje: null, fase: 'sin_viaje' });
+    return res.json({
+      viaje: viajeActivo,
+      fase: fase === 'en_curso' ? 'activo' : fase
+    });
   } catch (error) {
     console.error('Error al obtener el viaje activo del conductor:', error);
     res.status(500).json({ error: 'Error al obtener el viaje activo.' });
@@ -46,49 +36,46 @@ exports.getViajeActivoConductor = async (req, res) => {
 // Filtra con lógica estricta y fases según el día actual.
 exports.getViajeActivoPadre = async (req, res) => {
   try {
-    const estudiantes = await Estudiante.find({ padre_id: req.user.id });
-    if (!estudiantes || estudiantes.length === 0) {
+    const Estudiante = require('../models/Estudiante');
+    const Viaje = require('../models/Viaje');
+
+    // Obtener los hijos del padre
+    const parentId = req.user.id || req.user._id;
+    const hijos = await Estudiante.find({
+      padre_id: parentId
+    }).select('ruta_id conductor_id');
+
+    if (!hijos.length) {
       return res.json({ viaje: null, fase: 'sin_viaje' });
     }
 
-    const conductorIds = estudiantes.map(e => e.conductor_id).filter(Boolean);
-    const inicioDia = new Date();
-    inicioDia.setHours(0, 0, 0, 0);
+    // Si viene ruta_id como query param, usar ese
+    //    Si no, buscar en todas las rutas de los hijos
+    const rutaIds = req.query.ruta_id
+      ? [req.query.ruta_id]
+      : hijos.map(h => h.ruta_id).filter(Boolean);
 
-    // Existe viaje con estado 'activo' hoy
-    const viajeActivo = await Viaje.findOne({
-      conductor_id: { $in: conductorIds },
-      estado: 'activo',
-      createdAt: { $gte: inicioDia }
-    });
-
-    if (viajeActivo) {
-      return res.json({ viaje: viajeActivo, fase: 'en_curso' });
+    if (!rutaIds.length) {
+      return res.json({ viaje: null, fase: 'sin_viaje' });
     }
 
-    // Existe viaje tipo 'ida' con estado 'finalizado' HOY
-    // Y NO existe viaje tipo 'vuelta' con estado 'activo' o 'finalizado' hoy
-    const viajeIdaHoy = await Viaje.findOne({
-      conductor_id: { $in: conductorIds },
-      estado: 'finalizado',
-      tipo_viaje: 'ida',
-      createdAt: { $gte: inicioDia }
-    });
+    const rutaId = rutaIds[0];
 
-    const viajeVueltaHoy = await Viaje.findOne({
-      conductor_id: { $in: conductorIds },
-      tipo_viaje: 'vuelta',
-      createdAt: { $gte: inicioDia }
-    });
+    const { calcularFaseRuta } = require('../utils/viajeHelper');
+    const fase = await calcularFaseRuta(rutaId);
 
-    if (viajeIdaHoy && !viajeVueltaHoy) {
-      return res.json({ viaje: null, fase: 'entre_viajes' });
+    let viajeActivo = null;
+    if (fase === 'en_curso') {
+      viajeActivo = await Viaje.findOne({
+        ruta_id: rutaId,
+        estado: 'activo'
+      }).populate('ruta_id', 'nombre_ruta zona horario_salida');
     }
 
-    return res.json({ viaje: null, fase: 'sin_viaje' });
+    res.json({ viaje: viajeActivo, fase });
   } catch (error) {
-    console.error('Error al obtener viaje activo para padre:', error);
-    res.status(500).json({ error: 'Error al obtener el viaje activo.' });
+    console.error('Error en getViajeActivoPadre:', error);
+    res.status(500).json({ error: 'Error interno al obtener el viaje activo.' });
   }
 };
 

@@ -39,7 +39,7 @@ exports.actualizarPerfilConductor = async (req, res) => {
           "datos_conductor.horario_inicio": horario_inicio
         }
       },
-      { new: true } //Para que devuelva el documento con los cambios aplicados
+      { returnDocument: 'after' } //Para que devuelva el documento con los cambios aplicados
     );
 
     if (!conductorActualizado) return res.status(404).json({ error: 'Usuario no encontrado' });
