@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, TextInput,
   StyleSheet, StatusBar, ScrollView, Modal, Alert,
-  Image, ActivityIndicator
+  Image, ActivityIndicator, KeyboardAvoidingView, Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -187,41 +187,46 @@ export default function HijosQRScreen({ navigation, route }) {
         onRequestClose={() => setModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Añadir hijo</Text>
-            <Text style={styles.modalDesc}>
-              Ingresa el nombre de tu hijo. Se generará automáticamente su código QR único.
-            </Text>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={{ width: '100%', alignItems: 'center' }}
+          >
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Añadir hijo</Text>
+              <Text style={styles.modalDesc}>
+                Ingresa el nombre de tu hijo. Se generará automáticamente su código QR único.
+              </Text>
 
-            <Text style={styles.label}>Nombre del hijo</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Nombre completo"
-              placeholderTextColor="#aaa"
-              value={nombreHijo}
-              onChangeText={setNombreHijo}
-              editable={!guardando}
-            />
+              <Text style={styles.label}>Nombre del hijo</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Nombre completo"
+                placeholderTextColor="#aaa"
+                value={nombreHijo}
+                onChangeText={setNombreHijo}
+                editable={!guardando}
+              />
 
-            <TouchableOpacity
-              style={[styles.btnConfirmar, guardando && { opacity: 0.6 }]}
-              onPress={agregarHijo}
-              disabled={guardando}
-            >
-              {guardando
-                ? <ActivityIndicator color="#0D1B3E" />
-                : <Text style={styles.btnConfirmarText}>Generar QR</Text>
-              }
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btnConfirmar, guardando && { opacity: 0.6 }]}
+                onPress={agregarHijo}
+                disabled={guardando}
+              >
+                {guardando
+                  ? <ActivityIndicator color="#0D1B3E" />
+                  : <Text style={styles.btnConfirmarText}>Generar QR</Text>
+                }
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.btnCancelar}
-              onPress={() => { setModalVisible(false); setNombreHijo(''); }}
-              disabled={guardando}
-            >
-              <Text style={styles.btnCancelarText}>Cancelar</Text>
-            </TouchableOpacity>
-          </View>
+              <TouchableOpacity
+                style={styles.btnCancelar}
+                onPress={() => { setModalVisible(false); setNombreHijo(''); }}
+                disabled={guardando}
+              >
+                <Text style={styles.btnCancelarText}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
     </SafeAreaView>

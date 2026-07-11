@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView,
   StyleSheet, StatusBar, RefreshControl, ActivityIndicator,
-  Alert,
+  Alert, Linking
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -32,39 +32,16 @@ export default function AvisosPadreScreen({ navigation }) {
   const [cargando, setCargando] = useState(true);
   const [refrescando, setRefrescando] = useState(false);
   const [marcandoTodas, setMarcandoTodas] = useState(false);
-  const [hijos, setHijos] = useState([]);
-  const [selectedHijoId, setSelectedHijoId] = useState(null);
 
   const sinLeer = notificaciones.filter((n) => !n.leida).length;
 
-  const tokenAuth = async () => auth.currentUser ? auth.currentUser.getIdToken() : '';
+  const tokenAuth = async () => auth.currentUser.getIdToken();
 
   const cargarNotificaciones = useCallback(async ({ mostrarCarga = false, silencioso = false } = {}) => {
     if (mostrarCarga) setCargando(true);
     try {
-      if (!auth.currentUser) return;
       const token = await tokenAuth();
-
-      // Cargar hijos primero si no están cargados
-      let currentHijoId = selectedHijoId;
-      if (hijos.length === 0) {
-        const resHijos = await api.get('/api/padre/mis-hijos', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (resHijos.data && resHijos.data.hijos) {
-          setHijos(resHijos.data.hijos);
-          if (resHijos.data.hijos.length > 0) {
-            currentHijoId = resHijos.data.hijos[0]._id;
-            setSelectedHijoId(currentHijoId);
-          }
-        }
-      }
-
-      const url = currentHijoId 
-        ? `/api/notificaciones/padre?estudiante_id=${currentHijoId}`
-        : '/api/notificaciones/padre';
-
-      const response = await api.get(url, {
+      const response = await api.get('/api/notificaciones/padre', {
         headers: { Authorization: `Bearer ${token}` },
       });
       const nuevas = response.data.notificaciones || [];
@@ -77,13 +54,7 @@ export default function AvisosPadreScreen({ navigation }) {
       setCargando(false);
       setRefrescando(false);
     }
-  }, [selectedHijoId, hijos.length]);
-
-  useEffect(() => {
-    if (selectedHijoId) {
-      cargarNotificaciones({ mostrarCarga: true });
-    }
-  }, [selectedHijoId]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -97,6 +68,12 @@ export default function AvisosPadreScreen({ navigation }) {
     }, 8000);
     return () => clearInterval(intervalo);
   }, [cargarNotificaciones]);
+
+  useEffect(() => {
+    if (notificaciones.length > 0 && sinLeer > 0 && !marcandoTodas) {
+      marcarTodasLeidas();
+    }
+  }, [notificaciones, sinLeer, marcandoTodas]);
 
   const marcarLeida = async (id) => {
     setNotificaciones((prev) =>
@@ -122,6 +99,31 @@ export default function AvisosPadreScreen({ navigation }) {
     }
     setExpandida(id);
     marcarLeida(id);
+  };
+
+  const handleContactarConductor = async (conductor) => {
+    const telefono = conductor?.telefono || conductor?.datos_conductor?.telefono;
+    if (!telefono) {
+      Alert.alert('Error', 'El conductor no tiene un número de teléfono registrado.');
+      return;
+    }
+    const num = telefono.replace(/[^0-9]/g, '');
+    const fullNum = num.startsWith('507') ? num : `507${num}`;
+    
+    const mensaje = `Hola, buenas. Quería consultarle sobre el servicio de BusWay.`;
+    const url = `https://wa.me/${fullNum}?text=${encodeURIComponent(mensaje)}`;
+    
+    try {
+      const soportado = await Linking.canOpenURL(url);
+      if (soportado) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert('Error', 'No se pudo abrir WhatsApp. Verifica que esté instalado.');
+      }
+    } catch (err) {
+      console.log('Error opening whatsapp link:', err);
+      Alert.alert('Error', 'No se pudo abrir WhatsApp.');
+    }
   };
 
   const marcarTodasLeidas = async () => {
@@ -174,25 +176,6 @@ export default function AvisosPadreScreen({ navigation }) {
       </View>
 
       <View style={s.card}>
-        {hijos.length > 1 && (
-          <View style={s.hijosTabsContainer}>
-            {hijos.map((h) => {
-              const active = h._id === selectedHijoId;
-              return (
-                <TouchableOpacity
-                  key={h._id}
-                  style={[s.hijoTab, active && s.hijoTabActive]}
-                  onPress={() => setSelectedHijoId(h._id)}
-                >
-                  <Ionicons name="person-outline" size={14} color={active ? '#0D1B3E' : '#888'} />
-                  <Text style={[s.hijoTabText, active && s.hijoTabTextActive]}>
-                    {h.nombre}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
         <View style={s.subHeader}>
           <Text style={s.subTitle}>Notificaciones recibidas</Text>
 
@@ -277,12 +260,24 @@ export default function AvisosPadreScreen({ navigation }) {
                   </Text>
 
                   {abierta && (
-                    <View style={s.hijosRow}>
-                      <Ionicons name="people-outline" size={13} color="#00AEEF" />
-                      <Text style={s.hijosText}>
-                        Aplica a: {hijos.length > 0 ? hijos.map((hijo) => hijo.nombre).join(', ') : 'tu ruta'}
-                      </Text>
-                    </View>
+                    <>
+                      <View style={s.hijosRow}>
+                        <Ionicons name="people-outline" size={13} color="#00AEEF" />
+                        <Text style={s.hijosText}>
+                          Aplica a: {hijos.length > 0 ? hijos.map((hijo) => hijo.nombre).join(', ') : 'tu ruta'}
+                        </Text>
+                      </View>
+                      {(n.conductor_id?.telefono || n.conductor_id?.datos_conductor?.telefono) && (
+                        <TouchableOpacity
+                          style={s.btnChatConductor}
+                          onPress={() => handleContactarConductor(n.conductor_id)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="logo-whatsapp" size={14} color="#FFF" />
+                          <Text style={s.btnChatConductorText}>Contactar Conductor</Text>
+                        </TouchableOpacity>
+                      )}
+                    </>
                   )}
 
                   <View style={s.metaRow}>
@@ -404,37 +399,21 @@ const s = StyleSheet.create({
   emptyBox: { alignItems: 'center', paddingTop: 60, gap: 10 },
   emptyText: { fontSize: 15, color: '#8A94A6', fontWeight: '600' },
   emptySub: { fontSize: 12, color: '#AEB7C4', textAlign: 'center', paddingHorizontal: 32 },
-  hijosTabsContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: '6%',
-    paddingVertical: 12,
-    gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F4FA',
-    backgroundColor: '#fff',
-  },
-  hijoTab: {
+  btnChatConductor: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    backgroundColor: '#25D366',
+    borderRadius: 8,
     paddingVertical: 6,
     paddingHorizontal: 12,
-    borderRadius: 20,
-    backgroundColor: '#F5F8FC',
-    borderWidth: 1.5,
-    borderColor: '#E3ECF7',
-    gap: 4,
+    marginTop: 8,
+    marginBottom: 4,
   },
-  hijoTabActive: {
-    backgroundColor: '#FFD700',
-    borderColor: '#FFD700',
-  },
-  hijoTabText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#888',
-  },
-  hijoTabTextActive: {
-    color: '#0D1B3E',
+  btnChatConductorText: {
+    fontSize: 11,
     fontWeight: '700',
+    color: '#FFF',
   },
 });

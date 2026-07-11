@@ -1,222 +1,454 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, Pressable,
   StyleSheet, StatusBar, Alert,
   ScrollView, useWindowDimensions, TextInput,
   KeyboardAvoidingView, Platform, Linking, Modal,
-  FlatList
+  FlatList, ActivityIndicator
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { auth } from '../config/firebase';
+import api from '../config/api';
 
-// ─── Datos de ejemplo ────────────────────────────────────────────────────────
-const CONDUCTORES_DEMO = [
-  {
-    id: '1',
-    nombre: 'Carlos Mendoza',
-    vehiculo: 'Bus Toyota Hiace 2020',
-    escuelas: ['Instituto Fermín Naudeau', 'Colegio San Agustín'],
-    zonas: ['Arraiján', 'La Chorrera'],
-    tarifa: 80,
-    rating: 4.8,
-    reviews: 23,
-    plazasDisponibles: 3,
-    verificado: true,
-    telefono: '50700000001',
-  },
-  {
-    id: '2',
-    nombre: 'Roberto Salas',
-    vehiculo: 'Minibús Hyundai County',
-    escuelas: ['Escuela República de México'],
-    zonas: ['Arraiján', 'Vista Alegre'],
-    tarifa: 65,
-    rating: 4.5,
-    reviews: 11,
-    plazasDisponibles: 6,
-    verificado: true,
-    telefono: '50700000002',
-  },
-  {
-    id: '3',
-    nombre: 'Luis Herrera',
-    vehiculo: 'Bus Mitsubishi Rosa 2019',
-    escuelas: ['Instituto Fermín Naudeau', 'Colegio La Salle'],
-    zonas: ['La Chorrera', 'Barrio Colón'],
-    tarifa: 75,
-    rating: 4.9,
-    reviews: 37,
-    plazasDisponibles: 1,
-    verificado: true,
-    telefono: '50700000003',
-  },
+const PROVINCIAS = [
+  'Panamá', 'Panamá Oeste', 'Colón', 'Coclé', 'Veraguas',
+  'Herrera', 'Los Santos', 'Chiriquí', 'Bocas del Toro', 'Darién',
+  'Emberá-Wounaan', 'Guna Yala', 'Ngäbe-Buglé',
 ];
 
-const HIJOS_DEMO = [
-  { id: 'h1', nombre: 'Sofía' },
-  { id: 'h2', nombre: 'Mateo' },
-];
-
-// Estado compartido simulado de solicitudes (en producción viene del backend)
-// Se declara fuera del componente para que persista entre renders como si fuera
-// un store global simple para la demo.
-let SOLICITUDES_GLOBALES = [
-  {
-    id: 's0',
-    conductorId: '2',
-    conductorNombre: 'Roberto Salas',
-    conductorVehiculo: 'Minibús Hyundai County',
-    conductorTarifa: 65,
-    escuela: 'Escuela República de México',
-    hijoNombre: 'Mateo',
-    estado: 'pendiente', // 'pendiente' | 'aceptada' | 'rechazada'
-    fecha: '12/06/2026',
-  },
-];
-
-const RUTAS_CONDUCTOR_DEMO = [
-  {
-    id: 'r1',
-    escuela: 'Instituto Fermín Naudeau',
-    zonas: ['Arraiján', 'Vista Alegre'],
-    alumnos: 12,
-    activa: true,
-  },
-];
-
-const PROVINCIAS = ['Panamá', 'Panamá Oeste', 'Colón', 'Coclé', 'Veraguas', 'Herrera', 'Los Santos', 'Chiriquí', 'Bocas del Toro', 'Darién'];
 const DISTRITOS = {
-  'Panamá': ['Panamá', 'San Miguelito', 'Chepo', 'Taboga'],
-  'Panamá Oeste': ['Arraiján', 'La Chorrera', 'Capira', 'Chame', 'San Carlos'],
+  'Panamá':           ['Panamá', 'San Miguelito', 'Chepo', 'Balboa', 'Chimán', 'Taboga'],
+  'Panamá Oeste':     ['Arraiján', 'La Chorrera', 'Capira', 'Chame', 'San Carlos'],
+  'Colón':            ['Colón', 'Portobelo', 'Santa Isabel', 'Donoso', 'Chagres', 'Omar Torrijos Herrera'],
+  'Coclé':            ['Penonomé', 'Aguadulce', 'Natá', 'Olá', 'La Pintada', 'Antón'],
+  'Veraguas':         ['Santiago', 'Soná', 'Calobre', 'Cañazas', 'La Mesa', 'Atalaya', 'Montijo', 'Río de Jesús', 'Las Palmas', 'San Francisco', 'Santa Fe', 'Mariato'],
+  'Herrera':          ['Chitré', 'Ocú', 'Parita', 'Pesé', 'Santa María', 'Las Minas', 'Los Pozos'],
+  'Los Santos':       ['Las Tablas', 'Guararé', 'Los Santos', 'Macaracas', 'Pedasí', 'Pocrí', 'Tonosí', 'Villalba'],
+  'Chiriquí':         ['David', 'Boquete', 'Bugaba', 'Alanje', 'Barú', 'Boquerón', 'Dolega', 'Gualaca', 'Remedios', 'Renacimiento', 'San Félix', 'San Lorenzo', 'Tierras Altas', 'Tolé'],
+  'Bocas del Toro':   ['Bocas del Toro', 'Changuinola', 'Chiriquí Grande', 'Almirante'],
+  'Darién':           ['La Palma', 'Chepigana', 'Pinogana', 'Sambú'],
+  'Emberá-Wounaan':   ['Cémaco', 'Sambú'],
+  'Guna Yala':        ['Guna Yala'],
+  'Ngäbe-Buglé':      ['Besiko', 'Kankintú', 'Kusapín', 'Mironó', 'Müna', 'Ñürüm', 'Santa Catalina'],
 };
+
 const CORREGIMIENTOS = {
-  'Arraiján': ['Vista Alegre', 'Nuevo Arraiján', 'Burunga', 'Juan Demóstenes Arosemena', 'Veracruz'],
-  'La Chorrera': ['La Chorrera', 'Barrio Colón', 'El Arado', 'Herrera', 'Mendoza'],
-  'Panamá': ['Ancón', 'Bella Vista', 'Betania', 'Calidonia', 'Curundú', 'El Chorrillo', 'Parque Lefevre'],
+  // ── Panamá ──────────────────────────────────────────────────────────────
+  'Panamá': [
+    'Ancón', 'Bella Vista', 'Betania', 'Calidonia', 'Curundú',
+    'El Chorrillo', 'Juan Díaz', 'Las Mañanitas', 'Parque Lefevre',
+    'Pedregal', 'Pueblo Nuevo', 'Rio Abajo', 'San Felipe', 'San Francisco',
+    'Santa Ana', 'Tocumen',
+  ],
+  'San Miguelito': [
+    'Amelia Denis de Icaza', 'Belisario Frías', 'Belisario Porras',
+    'José Domingo Espinar', 'Mateo Iturralde', 'Rufina Alfaro',
+    'Victoriano Lorenzo',
+  ],
+  'Chepo':   ['Chepo', 'Cañita', 'Chepillo', 'El Llano', 'San Martín', 'Tortí'],
+  'Balboa':  ['Balboa', 'Arraiján (Balboa)', 'La Esmeralda', 'Nuevo Emperador', 'Saboga'],
+  'Chimán':  ['Chimán', 'Brujas', 'Gonzalo Vásquez', 'Ipetí', 'Majé', 'Unión Santeña'],
+  'Taboga':  ['Taboga', 'Otoque Occidente', 'Otoque Oriente'],
+
+  // ── Panamá Oeste ─────────────────────────────────────────────────────────
+  'Arraiján': [
+    'Vista Alegre', 'Nuevo Arraiján', 'Burunga',
+    'Juan Demóstenes Arosemena', 'Veracruz', 'Cerro Silvestre',
+    'Puerto Caimito',
+  ],
+  'La Chorrera': [
+    'La Chorrera', 'Barrio Colón', 'El Arado', 'Herrera', 'Mendoza',
+    'Guadalupe', 'Iglesitas', 'Iturralde', 'La Mitra', 'Obario',
+    'Playa Leona',
+  ],
+  'Capira': [
+    'Capira', 'Campana', 'Caimito', 'Cermeño', 'Cirí de Los Sotos',
+    'Cirí Grande', 'El Chaparro', 'La Trinidad', 'Lídice', 'Majagual',
+    'Villa Carmen',
+  ],
+  'Chame': [
+    'Chame', 'Bejuco', 'El Líbano', 'Nueva Gorgona', 'Punta Chame',
+  ],
+  'San Carlos': [
+    'San Carlos', 'El Espino', 'Hurtado', 'La Ermita', 'La Laguna',
+    'Las Uvas', 'Río Congo', 'Río Congo Arriba',
+  ],
+
+  // ── Colón ────────────────────────────────────────────────────────────────
+  'Colón': [
+    'Barrio Norte', 'Barrio Sur', 'Buena Vista', 'Cativá', 'Cristóbal',
+    'Escobal', 'Limón', 'Sabanitas', 'Salamanca',
+  ],
+  'Portobelo':              ['Portobelo', 'Garrote', 'Isla Grande', 'María Chiquita'],
+  'Santa Isabel':           ['Palmira', 'Cuipo', 'El Eneal', 'Nombre de Dios', 'Palenque', 'Viento Frío'],
+  'Donoso':                 ['Donoso', 'Coclé del Norte', 'El Guásimo', 'El Palmar', 'Río Indio'],
+  'Chagres':                ['Chagres', 'Achiote', 'Nuevo Chagres', 'Palmas Bellas', 'Salud'],
+  'Omar Torrijos Herrera':  ['Omar Torrijos Herrera', 'Ciricito', 'El Copé', 'Piedras Gordas', 'Río Indio'],
+
+  // ── Coclé ────────────────────────────────────────────────────────────────
+  'Penonomé': [
+    'Penonomé', 'Cañaveral', 'Chiguirí Arriba', 'Coclé', 'El Chirú',
+    'La Pintada', 'Pajonal', 'Río Grande', 'Toabré',
+  ],
+  'Aguadulce': ['Aguadulce', 'El Roble', 'Pocrí'],
+  'Natá':      ['Natá', 'Capellanía', 'El Caño', 'Olá'],
+  'Olá':       ['Olá', 'El Harino', 'Tulú'],
+  'La Pintada':['La Pintada', 'Anón', 'Caño Sucio', 'El Cope', 'Llano Grande', 'Llano Iguana'],
+  'Antón':     ['Antón', 'El Valle de Antón', 'Juan Díaz', 'Río Hato', 'San Juan de Dios'],
+
+  // ── Veraguas ─────────────────────────────────────────────────────────────
+  'Santiago': [
+    'Santiago', 'Carlos Santana Ávila', 'Edwin Fábrega', 'La Colorada',
+    'La Peña', 'La Raya de Santa María', 'Los Algarrobos', 'Ponuga',
+    'San Pedro del Espino',
+  ],
+  'Soná':         ['Soná', 'Cañazas', 'El Marañón', 'Gobea', 'Hicaco', 'Quebro', 'Río de Jesús'],
+  'Calobre':      ['Calobre', 'Chitra', 'El Bajo', 'La Laguna', 'Monjarás', 'San José'],
+  'Cañazas':      ['Cañazas', 'El Aromillo', 'El Piro', 'Los Valles', 'Ñurín', 'San Bartolo'],
+  'La Mesa':      ['La Mesa', 'Bisvalles', 'El Hato', 'El Potrero', 'Las Palmas', 'Urracá'],
+  'Atalaya':      ['Atalaya', 'Los Hatillos', 'Ponuga', 'San Antonio'],
+  'Montijo':      ['Montijo', 'Arenas', 'El Varal', 'Gobernadora', 'Leones', 'Pilón', 'Unión Chocó'],
+  'Río de Jesús': ['Río de Jesús', 'Capellanía', 'El Pavo', 'San Marcelo'],
+  'Las Palmas':   ['Las Palmas', 'Cerro de Casa', 'Corral Falso', 'Los Díaz', 'Pixvae', 'Puerto Vidal', 'Rodeo Viejo', 'San Martín de Porres', 'Viguí'],
+  'San Francisco':['San Francisco', 'Corozal', 'El Picador', 'La Garceana', 'La Yeguada', 'Los Milagros'],
+  'Santa Fe':     ['Santa Fe', 'Calovébora', 'El Alto', 'El Cuay', 'Gatuncito', 'Río Luis', 'Tute'],
+  'Mariato':      ['Mariato', 'Arenas', 'Cébaco', 'Jesús María', 'Los Asientos', 'Tebario'],
+
+  // ── Herrera ──────────────────────────────────────────────────────────────
+  'Chitré':      ['Chitré', 'Llano Bonito', 'La Arena', 'Monagrillo', 'San Juan Bautista'],
+  'Ocú':         ['Ocú', 'El Tijera', 'Llano de La Cruz', 'Llano Grande', 'Peñas Chatas'],
+  'Parita':      ['Parita', 'El Rincón', 'Los Cerritos', 'París', 'Portobelillo'],
+  'Pesé':        ['Pesé', 'Atalaya', 'La Cabima', 'La Garceana', 'Macaracas'],
+  'Santa María': ['Santa María', 'Cerro Largo', 'El Calabacito', 'El Toro', 'Los Canelos', 'Quebrada del Rosario'],
+  'Las Minas':   ['Las Minas', 'Cañas', 'El Ciruelo', 'El Pedregoso', 'Llano de Piedra'],
+  'Los Pozos':   ['Los Pozos', 'Agua Buena', 'El Capurí', 'El Cedro', 'Las Guías Arriba'],
+
+  // ── Los Santos ───────────────────────────────────────────────────────────
+  'Las Tablas': [
+    'Las Tablas', 'El Carate', 'El Cocal', 'El Manantial', 'Flores',
+    'La Enea', 'La Laja', 'La Palma', 'La Tiza', 'Llano Abajo',
+    'Los Asientos', 'Nuario', 'Palmira', 'Peña Blanca', 'Quebrada Seca',
+    'Santo Domingo', 'Ureña',
+  ],
+  'Guararé':   ['Guararé', 'El Ejido', 'La Espigadilla', 'La Palma de Guararé', 'Las Palmitas', 'Monagrillo', 'Puerto Mensabé', 'Sabanagrande'],
+  'Los Santos':['Los Santos', 'Llano Largo', 'Macaracas', 'Pedasí', 'Pocrí', 'Quia', 'Sabana Grande', 'Tonosí'],
+  'Macaracas': ['Macaracas', 'Bahía Honda', 'El Cedro', 'El Cocobolo', 'Lajamina', 'Mogollón', 'San José'],
+  'Pedasí':    ['Pedasí', 'Oria Arriba', 'Los Asientos'],
+  'Pocrí':     ['Pocrí', 'La Palma', 'Paritilla'],
+  'Tonosí':    ['Tonosí', 'Cañas', 'El Cortezo', 'El Muña', 'Los Asientos', 'Flores'],
+  'Villalba':  ['Villalba', 'La Colorada', 'La Laja', 'Las Cruces'],
+
+  // ── Chiriquí ─────────────────────────────────────────────────────────────
+  'David': [
+    'David', 'Burica', 'Las Lomas', 'Miraflores', 'Pedregal',
+    'San Carlos', 'San Pablo Nuevo Abajo', 'San Pablo Viejo Abajo',
+    'San Pablo Nuevo Arriba', 'San Pablo Viejo Arriba',
+  ],
+  'Boquete':      ['Boquete', 'Alto Boquete', 'Caldera', 'Cochea', 'Jaramillo', 'Los Naranjos', 'Palmira', 'Potrerillos'],
+  'Bugaba':       ['Bugaba', 'Alanje', 'Candela', 'Cerro Punta', 'Gualaca', 'Jaramillo', 'La Concepción', 'Los Anastacios', 'Potrerillos', 'Rovira'],
+  'Alanje':       ['Alanje', 'Cochea', 'Divalá', 'Guarumal', 'Los Anastacios', 'Paja de Sombrero', 'San Andrés'],
+  'Barú':         ['Puerto Armuelles', 'Limones', 'Rodolfo Aguilar Delgado'],
+  'Boquerón':     ['Boquerón', 'Chiriquí', 'La Estrella', 'Los Algarrobos', 'Palo Blanco', 'San Lorenzo'],
+  'Dolega':       ['Dolega', 'Dos Ríos', 'Los Algarrobos', 'Potrerillos Abajo', 'Potrerillos Arriba', 'Rovira'],
+  'Gualaca':      ['Gualaca', 'Chiriquí Grande', 'Dolega', 'Los Planes', 'Punta de Burica'],
+  'Remedios':     ['Remedios', 'Las Lajas', 'Membrillo', 'Paja de Sombrero', 'San Félix'],
+  'Renacimiento': ['Renacimiento', 'Cañas Gordas', 'Cerro Pelado', 'Guadalupe', 'Paso Canoa', 'Río Sereno'],
+  'San Félix':    ['San Félix', 'Agua de Salud', 'Katíos', 'Punta de Burica', 'Tolé'],
+  'San Lorenzo':  ['San Lorenzo', 'El Nancito', 'El Palmar', 'Horconcitos', 'San Lorenzo'],
+  'Tierras Altas':['Cerro Punta', 'Bambito', 'Guadalupe', 'Hartmann', 'Jaramillo Arriba', 'Jaramillo Abajo', 'Nueva Suiza', 'Volcán'],
+  'Tolé':         ['Tolé', 'Alto Caballero', 'Bella Vista', 'Cerro Viejo', 'Hato Culantro', 'Quebrada de Piedra'],
+
+  // ── Bocas del Toro ───────────────────────────────────────────────────────
+  'Bocas del Toro': ['Bocas del Toro', 'Bastimentos', 'Cauchero', 'Punta Laurel', 'Punta Manglares'],
+  'Changuinola':    ['Changuinola', 'Almirante', 'Guabito', 'Las Tablas', 'Miramar', 'Palo Seco', 'Silencio', 'Teribe'],
+  'Chiriquí Grande':['Chiriquí Grande', 'Bonyic', 'Miramar', 'Punta Peña', 'Rambala'],
+  'Almirante':      ['Almirante', 'Changuinola', 'Guabito'],
+
+  // ── Darién ───────────────────────────────────────────────────────────────
+  'La Palma':  ['La Palma', 'Agua Fría', 'Camogantí', 'Cucunatí', 'El Balsas', 'El Salto', 'Metetí', 'Río Congo', 'Tucutí'],
+  'Chepigana': ['La Palma', 'Garachiné', 'Jaqué', 'Metetí', 'Río Congo', 'Sambú', 'Taimatí', 'Tucutí', 'Vista Alegre'],
+  'Pinogana':  ['El Real de Santa María', 'Boca de Cupe', 'Chepigana', 'Lajas Blancas', 'Paya', 'Pucuro', 'Yaviza'],
+  'Sambú':     ['Sambú', 'La Chunga', 'Mogue', 'Río Balsa', 'Taimatí', 'Tucutí'],
+
+  // ── Comarcas ─────────────────────────────────────────────────────────────
+  'Emberá-Wounaan': ['Cémaco', 'Sambú'],
+  'Guna Yala':      ['Guna Yala'],
+  'Besiko':         ['Besiko'],
+  'Kankintú':       ['Kankintú'],
+  'Kusapín':        ['Kusapín'],
+  'Mironó':         ['Mironó'],
+  'Müna':           ['Müna'],
+  'Ñürüm':          ['Ñürüm'],
+  'Santa Catalina': ['Santa Catalina'],
 };
-const ESCUELAS_LISTA = [
-  'Instituto Fermín Naudeau',
-  'Colegio San Agustín',
-  'Colegio La Salle',
-  'Escuela República de México',
-  'Instituto América',
-  'Colegio Javier',
-];
-const ZONAS_LISTA = ['Arraiján', 'Vista Alegre', 'Nuevo Arraiján', 'La Chorrera', 'Barrio Colón', 'Capira', 'Chame'];
+
 
 // ─── Componente principal ─────────────────────────────────────────────────────
+// La ubicación siempre llega como objeto desde Mongo (los subcampos son los que
+// pueden ser null), así que no basta con chequear si `ubicacion` es truthy.
+const normalizarUbicacion = (u) => (u && u.provincia && u.distrito && u.corregimiento) ? u : null;
+
 export default function MarketplaceScreen({ navigation, route }) {
   const { usuario } = route.params;
   const insets = useSafeAreaInsets();
   const esPadre = usuario.tipo === 'padre';
 
-  const [ubicacionGuardada, setUbicacionGuardada] = useState(usuario.ubicacion ?? null);
-  const [rutasGuardadas, setRutasGuardadas] = useState(usuario.rutas ?? RUTAS_CONDUCTOR_DEMO);
-  // Forzar re-render al cambiar solicitudes globales
-  const [solicitudes, setSolicitudes] = useState([...SOLICITUDES_GLOBALES]);
+  const [ubicacionGuardada, setUbicacionGuardada] = useState(normalizarUbicacion(usuario.ubicacion));
+  const [conductores, setConductores] = useState([]);
+  const [hijos, setHijos] = useState([]);
+  const [solicitudes, setSolicitudes] = useState([]);
+  const [rutas, setRutas] = useState([]);
+  const [cargando, setCargando] = useState(true);
+
+  const cargarDatos = useCallback(async () => {
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const headers = { Authorization: `Bearer ${token}` };
+
+      if (esPadre) {
+        const [perfilRes, condRes, hijosRes, solicRes] = await Promise.all([
+          api.get('/api/auth/perfil', { headers }),
+          api.get('/api/conductor/disponibles', { headers }),
+          api.get('/api/padre/mis-hijos', { headers }),
+          api.get('/api/solicitudes/mis-solicitudes', { headers }),
+        ]);
+        setUbicacionGuardada(normalizarUbicacion(perfilRes.data?.usuario?.ubicacion));
+        setConductores(condRes.data.conductores || []);
+        setHijos(hijosRes.data.hijos || []);
+        setSolicitudes(solicRes.data.solicitudes || []);
+      } else {
+        const [rutasRes, solicRes] = await Promise.all([
+          api.get('/api/conductor/rutas', { headers }),
+          api.get('/api/solicitudes/recibidas', { headers }),
+        ]);
+        setRutas(rutasRes.data.rutas || []);
+        setSolicitudes(solicRes.data.solicitudes || []);
+      }
+    } catch (error) {
+      console.error('Error cargando datos:', error.response?.data || error.message);
+    } finally {
+      setCargando(false);
+    }
+  }, [esPadre]);
+
+  useEffect(() => {
+    cargarDatos();
+  }, [cargarDatos]);
 
   const actualizarSolicitudes = (nuevas) => {
-    SOLICITUDES_GLOBALES = nuevas;
-    setSolicitudes([...nuevas]);
+    setSolicitudes(nuevas);
   };
+
+  const agregarSolicitud = async (conductor, hijo, escuela, rutaId) => {
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const res = await api.post('/api/solicitudes', {
+        conductor_id: conductor._id,
+        hijos_ids: [hijo._id],
+        tarifa_mensual: conductor.tarifa || 0,
+        escuela,
+        ruta_id: rutaId,
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      setSolicitudes(prev => [res.data.solicitud, ...prev]);
+      return true;
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.error || 'No se pudo enviar la solicitud');
+      return false;
+    }
+  };
+
+  const aceptarSolicitud = async (id, tarifa) => {
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const res = await api.patch(`/api/solicitudes/${id}/aceptar`, {
+        tarifa_mensual: tarifa
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setSolicitudes(prev => prev.map(s =>
+        s._id === id ? { ...s, estado: 'aceptada', tarifa_mensual: tarifa } : s
+      ));
+      Alert.alert('Solicitud aceptada', 'El contrato ha sido creado exitosamente.');
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.error || 'No se pudo aceptar la solicitud');
+    }
+  };
+
+  const rechazarSolicitud = async (id) => {
+    try {
+      const token = await auth.currentUser.getIdToken();
+      await api.patch(`/api/solicitudes/${id}/rechazar`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setSolicitudes(prev => prev.map(s =>
+        s._id === id ? { ...s, estado: 'rechazada' } : s
+      ));
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.error || 'No se pudo rechazar la solicitud');
+    }
+  };
+
+  if (cargando) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar barStyle="light-content" backgroundColor="#0D1B3E" />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, marginTop: 80 }}>
+          <ActivityIndicator size="large" color="#0D1B3E" />
+          <Text style={{ marginTop: 12, color: '#888' }}>Cargando...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor="#0D1B3E" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Ionicons name="arrow-back-outline" size={22} color="#fff" />
-          </TouchableOpacity>
-          <View>
-            <Text style={styles.headerSub}>BusWay</Text>
-            <Text style={styles.headerTitle}>Marketplace</Text>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+              <Ionicons name="arrow-back-outline" size={22} color="#fff" />
+            </TouchableOpacity>
+            <View>
+              <Text style={styles.headerSub}>BusWay</Text>
+              <Text style={styles.headerTitle}>Marketplace</Text>
+            </View>
+            <View style={{ width: 40 }} />
           </View>
-          <View style={{ width: 40 }} />
         </View>
-      </View>
 
-      {/* Card blanca */}
-      <View style={styles.card}>
-        {esPadre ? (
-          <MarketplacePadre
-            ubicacion={ubicacionGuardada}
-            onGuardarUbicacion={(u) => setUbicacionGuardada(u)}
-            usuario={usuario}
-            solicitudes={solicitudes}
-            onAgregarSolicitud={(s) => actualizarSolicitudes([...SOLICITUDES_GLOBALES, s])}
-          />
-        ) : (
-          <MarketplaceConductor
-            rutas={rutasGuardadas}
-            onAgregarRuta={(r) => setRutasGuardadas(prev => [...prev, r])}
-            solicitudes={solicitudes}
-            onCambiarEstado={(id, nuevoEstado) => {
-              const actualizadas = SOLICITUDES_GLOBALES.map(s =>
-                s.id === id ? { ...s, estado: nuevoEstado } : s
-              );
-              actualizarSolicitudes(actualizadas);
-            }}
-            navigation={navigation}
-            usuario={usuario}
-          />
-        )}
-      </View>
-
+        {/* Card blanca */}
+        <View style={styles.card}>
+          {esPadre ? (
+            <MarketplacePadre
+              ubicacion={ubicacionGuardada}
+              onGuardarUbicacion={(u) => setUbicacionGuardada(normalizarUbicacion(u))}
+              usuario={usuario}
+              conductores={conductores}
+              hijos={hijos}
+              solicitudes={solicitudes}
+              onAgregarSolicitud={agregarSolicitud}
+              onRecargarConductores={cargarDatos}
+            />
+          ) : (
+            <MarketplaceConductor
+              navigation={navigation}
+              usuario={usuario}
+              rutas={rutas}
+              solicitudes={solicitudes}
+              onAceptarSolicitud={aceptarSolicitud}
+              onRechazarSolicitud={rechazarSolicitud}
+            />
+          )}
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
-
   );
 }
 
 // ─── Vista PADRE ──────────────────────────────────────────────────────────────
-function MarketplacePadre({ ubicacion, onGuardarUbicacion, usuario, solicitudes, onAgregarSolicitud }) {
-  const [tabActivo, setTabActivo] = useState('catalogo'); // 'catalogo' | 'enviadas'
+function MarketplacePadre({ ubicacion, onGuardarUbicacion, usuario, conductores, hijos, solicitudes, onAgregarSolicitud, onRecargarConductores }) {
+  const [tabActivo, setTabActivo] = useState('catalogo');
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
+  const [modoEdicion, setModoEdicion] = useState(false);
   const [busqueda, setBusqueda] = useState('');
   const [conductorSeleccionado, setConductorSeleccionado] = useState(null);
 
-  // Pantalla de configuración de ubicación
+  const conductoresMapeados = conductores.map(c => ({
+    _id: c._id,
+    nombre: c.nombre + ' ' + (c.apellido || ''),
+    vehiculo: c.vehiculo ? `${c.vehiculo.marca || ''} ${c.vehiculo.modelo || ''} ${c.vehiculo.anio || ''}`.trim() || 'Vehículo registrado' : 'Sin vehículo',
+    escuelas: [...new Set(c.rutas?.map(r => r.escuela).filter(Boolean) || [])],
+    zonas: [...new Set(c.rutas?.map(r => r.zona).filter(Boolean) || [])],
+    tarifa: c.tarifa || 0,
+    rating: c.rating || 0,
+    reviews: c.reviews || 0,
+    plazasDisponibles: c.plazasDisponibles || 0,
+    verificado: c.verificado || false,
+    telefono: c.telefono || '',
+    rutas: c.rutas || [],
+  }));
+
   if (!ubicacion && !mostrarFormulario) {
     return <PantallaConfigUbicacion onComenzar={() => setMostrarFormulario(true)} />;
   }
-  if (mostrarFormulario && !ubicacion) {
+  if (mostrarFormulario) {
     return (
       <FormularioUbicacion
-        onGuardar={(u) => { onGuardarUbicacion(u); setMostrarFormulario(false); }}
-        onCancelar={() => setMostrarFormulario(false)}
+        ubicacionInicial={modoEdicion ? ubicacion : null}
+        onGuardar={(u) => { onGuardarUbicacion(u); setMostrarFormulario(false); setModoEdicion(false); onRecargarConductores(); }}
+        onCancelar={() => { setMostrarFormulario(false); setModoEdicion(false); }}
       />
     );
   }
 
-  // Modal de solicitud
   if (conductorSeleccionado) {
     return (
       <PantallaSolicitud
         conductor={conductorSeleccionado}
         usuario={usuario}
+        hijos={hijos}
         ubicacion={ubicacion}
-        onEnviar={(nuevaSolicitud) => {
-          onAgregarSolicitud(nuevaSolicitud);
-          setConductorSeleccionado(null);
-          setTabActivo('enviadas');
+        onEnviar={async (hijo, escuela, rutaId) => {
+          const exito = await onAgregarSolicitud(conductorSeleccionado, hijo, escuela, rutaId);
+          if (exito) {
+            setConductorSeleccionado(null);
+            setTabActivo('enviadas');
+            return true;
+          }
+          return false;
         }}
         onCancelar={() => setConductorSeleccionado(null)}
       />
     );
   }
 
-  const conductoresFiltrados = CONDUCTORES_DEMO.filter(c =>
+  const estaEnZona = (conductor, ubic) => {
+    if (!ubic) return false;
+    const normalizarTexto = (texto) => {
+      if (!texto) return '';
+      return texto
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
+    };
+    
+    const parentCorregimiento = normalizarTexto(ubic.corregimiento);
+    const parentDistrito = normalizarTexto(ubic.distrito);
+    
+    return conductor.zonas.some(z => {
+      const zonaNorm = normalizarTexto(z);
+      return (
+        zonaNorm === parentCorregimiento || 
+        zonaNorm === parentDistrito ||
+        parentCorregimiento.includes(zonaNorm) ||
+        zonaNorm.includes(parentCorregimiento) ||
+        parentDistrito.includes(zonaNorm) ||
+        zonaNorm.includes(parentDistrito)
+      );
+    });
+  };
+
+  const conductoresFiltrados = conductoresMapeados.filter(c =>
     busqueda === '' ||
     c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
     c.escuelas.some(e => e.toLowerCase().includes(busqueda.toLowerCase())) ||
     c.zonas.some(z => z.toLowerCase().includes(busqueda.toLowerCase()))
   );
 
+  const conductoresEnZona = conductoresFiltrados.filter(c => estaEnZona(c, ubicacion));
+  const conductoresFueraDeZona = conductoresFiltrados.filter(c => !estaEnZona(c, ubicacion));
+
   return (
     <View style={{ flex: 1 }}>
-      {/* Tabs internos */}
       <View style={styles.tabsInternos}>
         <TouchableOpacity
           style={[styles.tabInterno, tabActivo === 'catalogo' && styles.tabInternoActivo]}
@@ -245,7 +477,6 @@ function MarketplacePadre({ ubicacion, onGuardarUbicacion, usuario, solicitudes,
 
       {tabActivo === 'catalogo' ? (
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-          {/* Ubicación sin fondo celeste */}
           <View style={styles.ubicacionSimple}>
             <View style={styles.ubicacionIconCircle}>
               <Ionicons name="location" size={18} color="#0D1B3E" />
@@ -256,12 +487,11 @@ function MarketplacePadre({ ubicacion, onGuardarUbicacion, usuario, solicitudes,
                 {ubicacion?.corregimiento}, {ubicacion?.distrito} · {ubicacion?.provincia}
               </Text>
             </View>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => { setModoEdicion(true); setMostrarFormulario(true); }}>
               <Text style={styles.cambiarLink}>Cambiar</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Búsqueda */}
           <View style={styles.searchBar}>
             <Ionicons name="search-outline" size={18} color="#888" />
             <TextInput
@@ -278,23 +508,54 @@ function MarketplacePadre({ ubicacion, onGuardarUbicacion, usuario, solicitudes,
             )}
           </View>
 
-          <Text style={styles.sectionTitle}>Conductores disponibles</Text>
-          <Text style={styles.sectionSub}>{conductoresFiltrados.length} conductores cerca de tu zona</Text>
-
-          {conductoresFiltrados.map(conductor => (
-            <CardConductor
-              key={conductor.id}
-              conductor={conductor}
-              onSolicitar={() => setConductorSeleccionado(conductor)}
-            />
-          ))}
-
-          {conductoresFiltrados.length === 0 && (
+          {conductoresFiltrados.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons name="bus-outline" size={40} color="#ccc" />
               <Text style={styles.emptyTitle}>Sin resultados</Text>
               <Text style={styles.emptyDesc}>Intenta con otra escuela o zona.</Text>
             </View>
+          ) : (
+            <>
+              {/* Conductores en tu zona */}
+              {conductoresEnZona.length > 0 ? (
+                <>
+                  <Text style={styles.sectionTitle}>Conductores en tu zona</Text>
+                  <Text style={styles.sectionSub}>{conductoresEnZona.length} conductor{conductoresEnZona.length !== 1 ? 'es' : ''} cerca de tu ubicación</Text>
+                  {conductoresEnZona.map(conductor => (
+                    <CardConductor
+                      key={conductor._id}
+                      conductor={conductor}
+                      onSolicitar={() => setConductorSeleccionado(conductor)}
+                    />
+                  ))}
+                </>
+              ) : (
+                <View style={styles.noConductoresZonaBox}>
+                  <Ionicons name="alert-circle-outline" size={22} color="#D97706" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.noConductoresZonaTitle}>No hay conductores en tu zona</Text>
+                    <Text style={styles.noConductoresZonaDesc}>
+                      No encontramos conductores en {ubicacion?.corregimiento || ubicacion?.distrito}. A continuación se muestran opciones en otras áreas:
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Conductores fuera de tu zona */}
+              {conductoresFueraDeZona.length > 0 && (
+                <>
+                  <Text style={[styles.sectionTitle, { marginTop: conductoresEnZona.length > 0 ? 24 : 10 }]}>Conductores fuera de tu zona</Text>
+                  <Text style={styles.sectionSub}>{conductoresFueraDeZona.length} conductor{conductoresFueraDeZona.length !== 1 ? 'es' : ''} disponible{conductoresFueraDeZona.length !== 1 ? 's' : ''} en otras áreas</Text>
+                  {conductoresFueraDeZona.map(conductor => (
+                    <CardConductor
+                      key={conductor._id}
+                      conductor={conductor}
+                      onSolicitar={() => setConductorSeleccionado(conductor)}
+                    />
+                  ))}
+                </>
+              )}
+            </>
           )}
         </ScrollView>
       ) : (
@@ -304,52 +565,60 @@ function MarketplacePadre({ ubicacion, onGuardarUbicacion, usuario, solicitudes,
   );
 }
 
-// ─── Pantalla de solicitud (inline, reemplaza la vista del catálogo) ───────────
-function PantallaSolicitud({ conductor, usuario, ubicacion, onEnviar, onCancelar }) {
-  const hijos = usuario.hijos ?? HIJOS_DEMO;
+// ─── Pantalla de solicitud ────────────────────────────────────────────────────
+function PantallaSolicitud({ conductor, usuario, hijos, ubicacion, onEnviar, onCancelar }) {
   const [hijoSeleccionado, setHijoSeleccionado] = useState(null);
+  const [rutaSeleccionada, setRutaSeleccionada] = useState(
+    conductor.rutas && conductor.rutas.length > 0 ? conductor.rutas[0]._id : null
+  );
+  const [enviando, setEnviando] = useState(false);
 
-  const hijoObj = hijos.find(h => h.id === hijoSeleccionado);
-  const puedeEnviar = hijoSeleccionado !== null;
+  const hijoObj = hijos.find(h => h._id === hijoSeleccionado);
+  const puedeEnviar = hijoSeleccionado !== null && rutaSeleccionada !== null && !enviando;
 
   const handleWhatsApp = async () => {
     if (!puedeEnviar) return;
+    setEnviando(true);
 
-    const escuela = conductor.escuelas[0];
-    const mensaje =
-      `Hola ${conductor.nombre}, soy *${usuario.nombre} ${usuario.apellido}*, ` +
-      `padre/madre de *${hijoObj.nombre}* quien asiste a *${escuela}*. ` +
-      `Vi tu perfil en BusWay y me interesa contratar tu servicio de transporte escolar (tarifa $${conductor.tarifa}/mes). ` +
-      `¿Tienes disponibilidad en tu ruta para mi hijo/a? ¡Quedo pendiente, gracias!`;
+    try {
+      const selectedRouteObj = conductor.rutas.find(r => r._id === rutaSeleccionada);
+      const escuela = selectedRouteObj ? selectedRouteObj.escuela : (conductor.escuelas[0] || 'Escuela');
+      
+      const exito = await onEnviar(hijoObj, escuela, rutaSeleccionada);
+      
+      if (exito) {
+        const mensaje =
+          `Hola, buenas. Estoy interesado/a en su servicio de transporte escolar a través de BusWay. ` +
+          `Mi nombre es *${usuario.nombre} ${usuario.apellido}* y me gustaría consultar la disponibilidad de ruta para mi hijo/a *${hijoObj.nombre}* hacia la escuela *${escuela}*. ` +
+          `Quedo atento/a para coordinar los detalles. ¡Muchas gracias!`;
 
-    const numero = conductor.telefono ?? '50700000000';
-    const url = `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}`;
+        const tel = conductor.telefono || '6603-2950';
+        const num = tel.replace(/[^0-9]/g, '');
+        const fullNum = num.startsWith('507') ? num : `507${num}`;
+        const url = `https://wa.me/${fullNum}?text=${encodeURIComponent(mensaje)}`;
 
-    const nuevaSolicitud = {
-      id: 's' + Date.now(),
-      conductorId: conductor.id,
-      conductorNombre: conductor.nombre,
-      conductorVehiculo: conductor.vehiculo,
-      conductorTarifa: conductor.tarifa,
-      escuela: conductor.escuelas[0],
-      hijoNombre: hijoObj.nombre,
-      estado: 'pendiente',
-      fecha: new Date().toLocaleDateString('es-PA'),
-    };
-
-    const soportado = await Linking.canOpenURL(url);
-    if (soportado) {
-      await Linking.openURL(url);
-      onEnviar(nuevaSolicitud);
-    } else {
-      Alert.alert('Error', 'No se pudo abrir WhatsApp. Verifica que esté instalado.');
+        const soportado = await Linking.canOpenURL(url);
+        if (soportado) {
+          await Linking.openURL(url);
+        } else {
+          Alert.alert('Error', 'No se pudo abrir WhatsApp. Verifica que esté instalado.');
+        }
+      }
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Error', 'Ocurrió un error al enviar la solicitud.');
+    } finally {
+      setEnviando(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-        {/* Botón atrás */}
+    <View style={{ flex: 1 }}>
+      <ScrollView 
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.body} 
+        showsVerticalScrollIndicator={false}
+      >
         <TouchableOpacity onPress={onCancelar} style={styles.btnBack}>
           <Ionicons name="arrow-back-outline" size={18} color="#0D1B3E" />
           <Text style={styles.btnBackText}>Volver al catálogo</Text>
@@ -360,7 +629,6 @@ function PantallaSolicitud({ conductor, usuario, ubicacion, onEnviar, onCancelar
           Revisa la información antes de contactar al conductor.
         </Text>
 
-        {/* Datos del conductor */}
         <Text style={styles.sectionLabel}>Conductor</Text>
         <View style={styles.resumenCard}>
           <View style={styles.resumenCardTop}>
@@ -385,17 +653,12 @@ function PantallaSolicitud({ conductor, usuario, ubicacion, onEnviar, onCancelar
                 <Text style={styles.ratingTexto}>{conductor.rating} ({conductor.reviews} reseñas)</Text>
               </View>
             </View>
-            <View style={styles.tarifaBox}>
-              <Text style={styles.tarifaNum}>${conductor.tarifa}</Text>
-              <Text style={styles.tarifaMes}>/mes</Text>
-            </View>
           </View>
           <View style={styles.divider} />
           <FilaDatoCompacta icon="school-outline" label="Escuela" valor={conductor.escuelas[0]} />
           <FilaDatoCompacta icon="location-outline" label="Zonas" valor={conductor.zonas.join(', ')} last />
         </View>
 
-        {/* Datos del padre */}
         <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Tus datos</Text>
         <View style={styles.resumenCard}>
           <FilaDatoCompacta
@@ -413,7 +676,48 @@ function PantallaSolicitud({ conductor, usuario, ubicacion, onEnviar, onCancelar
           />
         </View>
 
-        {/* Selector de hijo */}
+        <Text style={[styles.sectionLabel, { marginTop: 20 }]}>¿Para cuál ruta?</Text>
+        <Text style={styles.sectionSub}>Selecciona la ruta de este conductor en la que deseas inscribir a tu hijo.</Text>
+
+        {!conductor.rutas || conductor.rutas.length === 0 ? (
+          <View style={styles.emptyHijos}>
+            <Ionicons name="bus-outline" size={32} color="#ccc" />
+            <Text style={styles.emptyHijosTitle}>Sin rutas registradas</Text>
+            <Text style={styles.emptyHijosDesc}>
+              Este conductor no tiene rutas activas actualmente.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.hijosLista}>
+            {conductor.rutas.map(rut => {
+              const activo = rutaSeleccionada === rut._id;
+              return (
+                <TouchableOpacity
+                  key={rut._id}
+                  style={[styles.hijoCard, activo && styles.hijoCardActivo]}
+                  onPress={() => setRutaSeleccionada(rut._id)}
+                  activeOpacity={0.85}
+                >
+                  <View style={[styles.hijoAvatar, { backgroundColor: '#E3ECF7' }, activo && { backgroundColor: '#0D1B3E' }]}>
+                    <Ionicons name="bus-outline" size={16} color={activo ? '#fff' : '#0D1B3E'} />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={[styles.hijoNombre, { marginBottom: 2 }, activo && styles.hijoNombreActivo]}>
+                      {rut.nombre_ruta || rut.nombre}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: '#888' }}>
+                      {rut.escuela} · {rut.zona}
+                    </Text>
+                  </View>
+                  <View style={[styles.radioCircle, activo && styles.radioCircleActivo]}>
+                    {activo && <View style={styles.radioDot} />}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
         <Text style={[styles.sectionLabel, { marginTop: 20 }]}>¿Para cuál hijo?</Text>
         <Text style={styles.sectionSub}>Selecciona quién recibirá este servicio.</Text>
 
@@ -428,12 +732,12 @@ function PantallaSolicitud({ conductor, usuario, ubicacion, onEnviar, onCancelar
         ) : (
           <View style={styles.hijosLista}>
             {hijos.map(hijo => {
-              const activo = hijoSeleccionado === hijo.id;
+              const activo = hijoSeleccionado === hijo._id;
               return (
                 <TouchableOpacity
-                  key={hijo.id}
+                  key={hijo._id}
                   style={[styles.hijoCard, activo && styles.hijoCardActivo]}
-                  onPress={() => setHijoSeleccionado(hijo.id)}
+                  onPress={() => setHijoSeleccionado(hijo._id)}
                   activeOpacity={0.85}
                 >
                   <View style={[styles.hijoAvatar, activo && styles.hijoAvatarActivo]}>
@@ -453,7 +757,6 @@ function PantallaSolicitud({ conductor, usuario, ubicacion, onEnviar, onCancelar
           </View>
         )}
 
-        {/* Nota */}
         {puedeEnviar && (
           <View style={styles.notaBox}>
             <Ionicons name="information-circle-outline" size={16} color="#00AEEF" />
@@ -465,23 +768,30 @@ function PantallaSolicitud({ conductor, usuario, ubicacion, onEnviar, onCancelar
           </View>
         )}
 
-        {/* Botón WhatsApp */}
         <TouchableOpacity
           style={[styles.btnWhatsapp, !puedeEnviar && styles.btnDisabled]}
           onPress={handleWhatsApp}
           activeOpacity={puedeEnviar ? 0.85 : 1}
+          disabled={!puedeEnviar}
         >
-          <Ionicons name="logo-whatsapp" size={20} color={puedeEnviar ? '#fff' : '#aaa'} />
-          <Text style={[styles.btnWhatsappText, !puedeEnviar && styles.btnWhatsappTextDisabled]}>
-            Enviar Solicitud
-          </Text>
+          {enviando ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <>
+              <Ionicons name="logo-whatsapp" size={20} color={puedeEnviar ? '#fff' : '#aaa'} />
+              <Text style={[styles.btnWhatsappText, !puedeEnviar && styles.btnWhatsappTextDisabled]}>
+                Enviar Solicitud
+              </Text>
+            </>
+          )}
         </TouchableOpacity>
 
         {!puedeEnviar && hijos.length > 0 && (
           <Text style={styles.hintText}>Selecciona un hijo para continuar</Text>
         )}
+        <View style={{ height: 40 }} />
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -505,13 +815,21 @@ function ListaSolicitudesEnviadas({ solicitudes }) {
       <Text style={styles.sectionSub}>{solicitudes.length} solicitud{solicitudes.length !== 1 ? 'es' : ''} enviada{solicitudes.length !== 1 ? 's' : ''}</Text>
 
       {solicitudes.map(sol => (
-        <CardSolicitudPadre key={sol.id} solicitud={sol} />
+        <CardSolicitudPadre key={sol._id} solicitud={sol} />
       ))}
     </ScrollView>
   );
 }
 
 function CardSolicitudPadre({ solicitud }) {
+  const conductorNombre = solicitud.conductor_id?.nombre
+    ? `${solicitud.conductor_id.nombre} ${solicitud.conductor_id.apellido || ''}`
+    : 'Conductor';
+  const hijosNombres = (solicitud.hijos_ids || []).map(h => h.nombre).join(', ') || 'Sin especificar';
+  const fecha = solicitud.createdAt
+    ? new Date(solicitud.createdAt).toLocaleDateString('es-PA')
+    : new Date(solicitud.fecha_solicitud).toLocaleDateString('es-PA');
+
   const cfg = {
     pendiente:  { color: '#F59E0B', bg: '#FFF8E1', icono: 'time-outline',            texto: 'Pendiente' },
     aceptada:   { color: '#16A34A', bg: '#E6F9EE', icono: 'checkmark-circle-outline', texto: 'Aceptada'  },
@@ -522,11 +840,11 @@ function CardSolicitudPadre({ solicitud }) {
     <View style={styles.solicitudCard}>
       <View style={styles.solicitudCardTop}>
         <View style={styles.conductorAvatar}>
-          <Text style={styles.conductorAvatarText}>{solicitud.conductorNombre.charAt(0)}</Text>
+          <Text style={styles.conductorAvatarText}>{conductorNombre.charAt(0)}</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.conductorNombre}>{solicitud.conductorNombre}</Text>
-          <Text style={styles.conductorVehiculo}>{solicitud.conductorVehiculo}</Text>
+          <Text style={styles.conductorNombre}>{conductorNombre}</Text>
+          <Text style={styles.conductorVehiculo}>{solicitud.escuela}</Text>
         </View>
         <View style={[styles.estadoBadge, { backgroundColor: cfg.bg }]}>
           <Ionicons name={cfg.icono} size={13} color={cfg.color} />
@@ -535,55 +853,73 @@ function CardSolicitudPadre({ solicitud }) {
       </View>
       <View style={styles.divider} />
       <View style={styles.solicitudInfo}>
-        <InfoChip icon="person-outline" texto={`Hijo: ${solicitud.hijoNombre}`} />
+        <InfoChip icon="person-outline" texto={`Hijo(s): ${hijosNombres}`} />
         <InfoChip icon="school-outline" texto={solicitud.escuela} />
-        <InfoChip icon="card-outline" texto={`$${solicitud.conductorTarifa}/mes`} />
-        <InfoChip icon="calendar-outline" texto={solicitud.fecha} />
+        <InfoChip icon="card-outline" texto={`$${solicitud.tarifa_mensual}/mes`} />
+        <InfoChip icon="calendar-outline" texto={fecha} />
       </View>
     </View>
   );
 }
 
 // ─── Vista CONDUCTOR ──────────────────────────────────────────────────────────
-function MarketplaceConductor({ rutas, onAgregarRuta, solicitudes, onCambiarEstado, navigation, usuario }) {
-  const [tabActivo, setTabActivo] = useState('rutas'); // 'rutas' | 'recibidas'
-  const [rutaDetalle, setRutaDetalle] = useState(null); //para los detalles de las rutas al tocar el card
-  const [mostrarFormulario, setMostrarFormulario] = useState(false);
+function MarketplaceConductor({ navigation, usuario, rutas, solicitudes, onAceptarSolicitud, onRechazarSolicitud }) {
+  const [tabActivo, setTabActivo] = useState('rutas');
+  const [rutaDetalle, setRutaDetalle] = useState(null);
 
-  //Estado para almacenar las cuentas bancarias guardadas por el conductor
-  const [cuentasBancarias, setCuentasBancarias] = useState([
-    { id: 'b1', nombre: 'Carlos Mendoza - General', numero: '03-72-01-234567-8', banco: 'Banco General' }
-  ]);
+  const [modalAceptarVisible, setModalAceptarVisible] = useState(false);
+  const [solicitudSeleccionada, setSolicitudSeleccionada] = useState(null);
+  const [tarifaAceptar, setTarifaAceptar] = useState('');
+  const [guardandoTarifa, setGuardandoTarifa] = useState(false);
 
-  if (mostrarFormulario) {
+  const iniciarAceptar = (sol) => {
+    setSolicitudSeleccionada(sol);
+    setTarifaAceptar(sol.tarifa_mensual ? sol.tarifa_mensual.toString() : '');
+    setModalAceptarVisible(true);
+  };
+
+  const ejecutarAceptar = async () => {
+    if (!tarifaAceptar.trim() || isNaN(tarifaAceptar) || parseFloat(tarifaAceptar) < 0) {
+      Alert.alert('Tarifa inválida', 'Por favor ingresa una tarifa mensual válida.');
+      return;
+    }
+    setGuardandoTarifa(true);
+    try {
+      await onAceptarSolicitud(solicitudSeleccionada._id, parseFloat(tarifaAceptar));
+      setModalAceptarVisible(false);
+    } catch (err) {
+      console.log('Error accepting solicitud:', err);
+    } finally {
+      setGuardandoTarifa(false);
+    }
+  };
+
+  const rutasMapeadas = rutas.map(r => ({
+    _id: r._id,
+    escuela: r.escuela,
+    zona: r.zona,
+    zonas: r.zona ? [r.zona] : [],
+    alumnos: r.totalEstudiantes !== undefined ? r.totalEstudiantes : (r.alumnos || 0),
+    activa: r.estado === 'activa',
+  }));
+
+  if (rutaDetalle) {
     return (
-      <FormularioRuta
-        cuentasGuardadas={cuentasBancarias}
-        onGuardarNuevaCuenta={(nuevaCta) => setCuentasBancarias(prev => [...prev, nuevaCta])}
-        onPublicar={(r) => { onAgregarRuta(r); setMostrarFormulario(false); }}
-        onCancelar={() => setMostrarFormulario(false)}
+      <DetalleRutaConductor 
+        ruta={rutaDetalle} 
+        onVolver={() => setRutaDetalle(null)}
+        navigation={navigation}
+        usuario={usuario}
       />
     );
   }
 
-  if (rutaDetalle) {
-  return (
-    <DetalleRutaConductor 
-      ruta={rutaDetalle} 
-      onVolver={() => setRutaDetalle(null)}
-      navigation={navigation}
-      usuario={usuario}
-    />
-  );
-}
-
-  if (rutas.length === 0 && tabActivo === 'rutas') {
-    return <PantallaConfigRuta onComenzar={() => setMostrarFormulario(true)} />;
+  if (rutas.length === 0) {
+    return <PantallaConfigRuta onIrARutas={() => navigation.navigate('Ruta', { usuario })} />;
   }
 
   return (
     <View style={{ flex: 1 }}>
-      {/* Tabs internos */}
       <View style={styles.tabsInternos}>
         <TouchableOpacity
           style={[styles.tabInterno, tabActivo === 'rutas' && styles.tabInternoActivo]}
@@ -619,14 +955,14 @@ function MarketplaceConductor({ rutas, onAgregarRuta, solicitudes, onCambiarEsta
                 {rutas.length} ruta{rutas.length !== 1 ? 's' : ''} activa{rutas.length !== 1 ? 's' : ''}
               </Text>
             </View>
-            <TouchableOpacity style={styles.btnNuevaRuta} onPress={() => setMostrarFormulario(true)}>
+            <TouchableOpacity style={styles.btnNuevaRuta} onPress={() => navigation.navigate('Ruta', { usuario })}>
               <Ionicons name="add-outline" size={18} color="#0D1B3E" />
               <Text style={styles.btnNuevaRutaText}>Nueva ruta</Text>
             </TouchableOpacity>
           </View>
 
-          {rutas.map((ruta, i) => (
-            <TouchableOpacity key={ruta.id ?? i} onPress={() => setRutaDetalle(ruta)} activeOpacity={0.85}>
+          {rutasMapeadas.map((ruta, i) => (
+            <TouchableOpacity key={ruta._id ?? i} onPress={() => setRutaDetalle(ruta)} activeOpacity={0.85}>
               <CardRuta ruta={ruta} />
             </TouchableOpacity>
           ))}
@@ -634,9 +970,71 @@ function MarketplaceConductor({ rutas, onAgregarRuta, solicitudes, onCambiarEsta
       ) : (
         <ListaSolicitudesRecibidas
           solicitudes={solicitudes}
-          onCambiarEstado={onCambiarEstado}
+          onAceptar={iniciarAceptar}
+          onRechazar={onRechazarSolicitud}
         />
       )}
+
+      {/* Modal para ingresar/confirmar Tarifa al Aceptar */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalAceptarVisible}
+        onRequestClose={() => setModalAceptarVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Aceptar Solicitud</Text>
+              
+              {solicitudSeleccionada && (
+                <Text style={styles.modalSub}>
+                  Establece o ajusta la tarifa mensual para la solicitud de{' '}
+                  <Text style={{ fontWeight: '700' }}>
+                    {solicitudSeleccionada.padre_id?.nombre} {solicitudSeleccionada.padre_id?.apellido || ''}
+                  </Text>
+                  :
+                </Text>
+              )}
+
+              <Text style={styles.sectionTitle}>Tarifa mensual ($)</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Ej. 75"
+                placeholderTextColor="#aaa"
+                value={tarifaAceptar}
+                onChangeText={setTarifaAceptar}
+                keyboardType="numeric"
+              />
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.btnModalCancelar}
+                  onPress={() => setModalAceptarVisible(false)}
+                  disabled={guardandoTarifa}
+                >
+                  <Text style={styles.btnModalCancelarText}>Cancelar</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.btnModalGuardar}
+                  onPress={ejecutarAceptar}
+                  disabled={guardandoTarifa}
+                >
+                  {guardandoTarifa ? (
+                    <ActivityIndicator size="small" color="#0D1B3E" />
+                  ) : (
+                    <Text style={styles.btnModalGuardarText}>Aceptar y Contratar</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -644,14 +1042,38 @@ function MarketplaceConductor({ rutas, onAgregarRuta, solicitudes, onCambiarEsta
 // ─── Detalles del card de la ruta (conductor) ──────────────────────────────────
 function DetalleRutaConductor({ ruta, onVolver, navigation, usuario }) {
   const [editando, setEditando] = useState(false);
-  
-  // Datos quemados para la simulación del Frontend del proyecto
-  const [estudiantes, setEstudiantes] = useState([
-    { id: 'e1', nombre: 'Mateo Coronado', escuela: ruta.escuela, zona: ruta.zonas?.[0] || 'Zona A', inputPos: '1' },
-    { id: 'e2', nombre: 'Sofía Pimentel', escuela: ruta.escuela, zona: ruta.zonas?.[1] || ruta.zonas?.[0] || 'Zona B', inputPos: '2' },
-    { id: 'e3', nombre: 'Lucas Sánchez', escuela: ruta.escuela, zona: ruta.zonas?.[0] || 'Zona A', inputPos: '3' },
-    { id: 'e4', nombre: 'Amanda Serrano', escuela: ruta.escuela, zona: ruta.zonas?.[0] || 'Zona A', inputPos: '4' }
-  ]);
+  const [cargando, setCargando] = useState(true);
+  const [estudiantes, setEstudiantes] = useState([]);
+
+  useEffect(() => {
+    const fetchEstudiantes = async () => {
+      try {
+        const token = await auth.currentUser.getIdToken();
+        const res = await api.get('/api/conductor/estudiantes', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        const data = res.data.estudiantes || [];
+        const filtrados = data
+          .filter(e => e.ruta_id && e.ruta_id._id === ruta._id)
+          .map((e, index) => ({
+            id: e._id,
+            nombre: e.nombre,
+            escuela: e.ruta_id.escuela || ruta.escuela,
+            zona: e.ruta_id.zona || ruta.zonas?.[0] || 'Sin zona',
+            inputPos: (index + 1).toString()
+          }));
+          
+        setEstudiantes(filtrados);
+      } catch (error) {
+        console.error('Error cargando estudiantes de la ruta:', error);
+        Alert.alert('Error', 'No se pudieron cargar los estudiantes de esta ruta');
+      } finally {
+        setCargando(false);
+      }
+    };
+    fetchEstudiantes();
+  }, [ruta._id]);
 
   // FUNCIÓN 1: Mover estudiantes usando las flechas Arriba / Abajo
   const moverEstudiante = (index, direccion) => {
@@ -715,78 +1137,87 @@ function DetalleRutaConductor({ ruta, onVolver, navigation, usuario }) {
           </View>
         </View>
 
-        {/* Encabezado del Listado / Tabla */}
-        <View style={styles.tablaHeaderRow}>
-          <Text style={styles.colTituloOrden}>Orden</Text>
-          <Text style={styles.colTituloEstudiante}>Estudiante / Parada</Text>
-          <TouchableOpacity 
-            style={[styles.btnEditarOrdenToggle, editando && { backgroundColor: '#0D1B3E' }]} 
-            onPress={() => setEditando(!editando)}
-          >
-            <Ionicons name={editando ? "checkmark-circle" : "create-outline"} size={14} color={editando ? "#FFF" : "#0D1B3E"} />
-            <Text style={[styles.btnEditarOrdenToggleText, editando && { color: '#FFF' }]}>
-              {editando ? "Listo" : "Editar Orden"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Filas de Estudiantes */}
-        {estudiantes.map((est, index) => (
-          <View key={est.id} style={[styles.filaEstudianteContainer, editando && { borderColor: '#FFD700', backgroundColor: '#FFFFFA' }]}>
-            
-            {/* Control Numérico Directo */}
-            <View style={styles.colCajaOrden}>
-              <TextInput
-                style={[styles.inputOrdenNumerico, editando && styles.inputOrdenNumericoActivo]}
-                value={est.inputPos}
-                keyboardType="numeric"
-                editable={editando}
-                onChangeText={(text) => cambiarPosicionPorInput(index, text)}
-              />
-            </View>
-
-            {/* Información Personal */}
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.nombreEstudianteFila}>{est.nombre}</Text>
-              <Text style={styles.subtextEstudianteFila}>Parada: {est.zona}</Text>
-            </View>
-
-            {/* Botones de Flechas (Visibles únicamente en Modo Edición) */}
-            {editando && (
-              <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-                <TouchableOpacity 
-                  disabled={index === 0} 
-                  style={index === 0 && { opacity: 0.25 }}
-                  onPress={() => moverEstudiante(index, 'ARRIBA')}
-                >
-                  <Ionicons name="arrow-up-circle-outline" size={26} color="#00AEEF" />
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  disabled={index === estudiantes.length - 1} 
-                  style={index === estudiantes.length - 1 && { opacity: 0.25 }}
-                  onPress={() => moverEstudiante(index, 'ABAJO')}
-                >
-                  <Ionicons name="arrow-down-circle-outline" size={26} color="#00AEEF" />
-                </TouchableOpacity>
-              </View>
-            )}
+        {cargando ? (
+          <View style={{ marginTop: 40, alignItems: 'center' }}>
+            <ActivityIndicator size="large" color="#0D1B3E" />
+            <Text style={{ marginTop: 10, color: '#888' }}>Cargando estudiantes...</Text>
           </View>
-        ))}
+        ) : (
+          <>
+            {/* Encabezado del Listado / Tabla */}
+            <View style={styles.tablaHeaderRow}>
+              <Text style={styles.colTituloOrden}>Orden</Text>
+              <Text style={styles.colTituloEstudiante}>Estudiante / Parada</Text>
+              <TouchableOpacity 
+                style={[styles.btnEditarOrdenToggle, editando && { backgroundColor: '#0D1B3E' }]} 
+                onPress={() => setEditando(!editando)}
+              >
+                <Ionicons name={editando ? "checkmark-circle" : "create-outline"} size={14} color={editando ? "#FFF" : "#0D1B3E"} />
+                <Text style={[styles.btnEditarOrdenToggleText, editando && { color: '#FFF' }]}>
+                  {editando ? "Listo" : "Editar Orden"}
+                </Text>
+              </TouchableOpacity>
+            </View>
 
-        {/* Botón de Acción Principal para Iniciar el Viaje */}
-        <TouchableOpacity 
-          style={styles.btnIniciarViajeAccion} 
-          onPress={() => navigation.navigate('Viaje', { usuario })}
-        >
-          <Ionicons name="play" size={16} color="#0D1B3E" />
-          <Text style={styles.btnIniciarViajeAccionText}>Iniciar Ruta en Tiempo Real</Text>
-        </TouchableOpacity>
+            {/* Filas de Estudiantes */}
+            {estudiantes.map((est, index) => (
+              <View key={est.id} style={[styles.filaEstudianteContainer, editando && { borderColor: '#FFD700', backgroundColor: '#FFFFFA' }]}>
+                
+                {/* Control Numérico Directo */}
+                <View style={styles.colCajaOrden}>
+                  <TextInput
+                    style={[styles.inputOrdenNumerico, editando && styles.inputOrdenNumericoActivo]}
+                    value={est.inputPos}
+                    keyboardType="numeric"
+                    editable={editando}
+                    onChangeText={(text) => cambiarPosicionPorInput(index, text)}
+                  />
+                </View>
+
+                {/* Información Personal */}
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={styles.nombreEstudianteFila}>{est.nombre}</Text>
+                  <Text style={styles.subtextEstudianteFila}>Parada: {est.zona}</Text>
+                </View>
+
+                {/* Botones de Flechas (Visibles únicamente en Modo Edición) */}
+                {editando && (
+                  <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                    <TouchableOpacity 
+                      disabled={index === 0} 
+                      style={index === 0 && { opacity: 0.25 }}
+                      onPress={() => moverEstudiante(index, 'ARRIBA')}
+                    >
+                      <Ionicons name="arrow-up-circle-outline" size={26} color="#00AEEF" />
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      disabled={index === estudiantes.length - 1} 
+                      style={index === estudiantes.length - 1 && { opacity: 0.25 }}
+                      onPress={() => moverEstudiante(index, 'ABAJO')}
+                    >
+                      <Ionicons name="arrow-down-circle-outline" size={26} color="#00AEEF" />
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            ))}
+
+            {/* Botón de Acción Principal para Iniciar el Viaje */}
+            <TouchableOpacity 
+              style={styles.btnIniciarViajeAccion} 
+              onPress={() => navigation.navigate('Viaje', { usuario })}
+            >
+              <Ionicons name="play" size={16} color="#0D1B3E" />
+              <Text style={styles.btnIniciarViajeAccionText}>Iniciar Ruta en Tiempo Real</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
 }
 // ─── Lista de solicitudes recibidas (conductor) ───────────────────────────────
-function ListaSolicitudesRecibidas({ solicitudes, onCambiarEstado }) {
+function ListaSolicitudesRecibidas({ solicitudes, onAceptar, onRechazar }) {
   if (solicitudes.length === 0) {
     return (
       <View style={styles.emptyState}>
@@ -806,10 +1237,10 @@ function ListaSolicitudesRecibidas({ solicitudes, onCambiarEstado }) {
 
       {solicitudes.map(sol => (
         <CardSolicitudConductor
-          key={sol.id}
+          key={sol._id}
           solicitud={sol}
-          onAceptar={() => onCambiarEstado(sol.id, 'aceptada')}
-          onRechazar={() => onCambiarEstado(sol.id, 'rechazada')}
+          onAceptar={() => onAceptar(sol)}
+          onRechazar={() => onRechazar(sol._id)}
         />
       ))}
     </ScrollView>
@@ -818,6 +1249,14 @@ function ListaSolicitudesRecibidas({ solicitudes, onCambiarEstado }) {
 
 function CardSolicitudConductor({ solicitud, onAceptar, onRechazar }) {
   const esPendiente = solicitud.estado === 'pendiente';
+  const padreNombre = solicitud.padre_id?.nombre
+    ? `${solicitud.padre_id.nombre} ${solicitud.padre_id.apellido || ''}`
+    : 'Padre';
+  const hijosNombres = (solicitud.hijos_ids || []).map(h => h.nombre).join(', ') || 'Sin especificar';
+  const fecha = solicitud.createdAt
+    ? new Date(solicitud.createdAt).toLocaleDateString('es-PA')
+    : new Date(solicitud.fecha_solicitud).toLocaleDateString('es-PA');
+
   const cfg = {
     pendiente:  { color: '#F59E0B', bg: '#FFF8E1', icono: 'time-outline',            texto: 'Pendiente' },
     aceptada:   { color: '#16A34A', bg: '#E6F9EE', icono: 'checkmark-circle-outline', texto: 'Aceptada'  },
@@ -828,8 +1267,8 @@ function CardSolicitudConductor({ solicitud, onAceptar, onRechazar }) {
     Alert.alert(
       accion === 'aceptar' ? 'Aceptar solicitud' : 'Rechazar solicitud',
       accion === 'aceptar'
-        ? `¿Deseas aceptar el servicio para ${solicitud.hijoNombre}?`
-        : `¿Deseas rechazar la solicitud de ${solicitud.hijoNombre}?`,
+        ? `¿Deseas aceptar el servicio para ${hijosNombres}?`
+        : `¿Deseas rechazar la solicitud de ${padreNombre}?`,
       [
         { text: 'Cancelar', style: 'cancel' },
         { text: accion === 'aceptar' ? 'Aceptar' : 'Rechazar', style: accion === 'aceptar' ? 'default' : 'destructive', onPress: callback },
@@ -841,10 +1280,10 @@ function CardSolicitudConductor({ solicitud, onAceptar, onRechazar }) {
     <View style={styles.solicitudCard}>
       <View style={styles.solicitudCardTop}>
         <View style={styles.hijoAvatarSol}>
-          <Text style={styles.hijoAvatarSolText}>{solicitud.hijoNombre.charAt(0)}</Text>
+          <Text style={styles.hijoAvatarSolText}>{padreNombre.charAt(0)}</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.conductorNombre}>{solicitud.hijoNombre}</Text>
+          <Text style={styles.conductorNombre}>{padreNombre}</Text>
           <Text style={styles.conductorVehiculo}>{solicitud.escuela}</Text>
         </View>
         <View style={[styles.estadoBadge, { backgroundColor: cfg.bg }]}>
@@ -855,8 +1294,9 @@ function CardSolicitudConductor({ solicitud, onAceptar, onRechazar }) {
 
       <View style={styles.divider} />
       <View style={styles.solicitudInfo}>
-        <InfoChip icon="calendar-outline" texto={`Enviada: ${solicitud.fecha}`} />
-        <InfoChip icon="card-outline" texto={`Tarifa acordada: $${solicitud.conductorTarifa}/mes`} />
+        <InfoChip icon="person-outline" texto={`Hijo(s): ${hijosNombres}`} />
+        <InfoChip icon="calendar-outline" texto={`Enviada: ${fecha}`} />
+        <InfoChip icon="card-outline" texto={`Tarifa: $${solicitud.tarifa_mensual}/mes`} />
       </View>
 
       {esPendiente && (
@@ -871,7 +1311,7 @@ function CardSolicitudConductor({ solicitud, onAceptar, onRechazar }) {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.btnAceptar}
-            onPress={() => confirmarAccion('aceptar', onAceptar)}
+            onPress={onAceptar}
             activeOpacity={0.85}
           >
             <Ionicons name="checkmark-outline" size={16} color="#0D1B3E" />
@@ -927,7 +1367,7 @@ function PantallaConfigUbicacion({ onComenzar }) {
 }
 
 // ─── Pantalla vacía conductor ─────────────────────────────────────────────────
-function PantallaConfigRuta({ onComenzar }) {
+function PantallaConfigRuta({ onIrARutas }) {
   return (
     <View style={styles.setupContainer}>
       <View style={styles.setupIconBig}>
@@ -937,23 +1377,24 @@ function PantallaConfigRuta({ onComenzar }) {
       <Text style={styles.setupDesc}>
         Los padres podrán encontrarte en el marketplace cuando publiques tu ruta y zonas de servicio.
       </Text>
-      <TouchableOpacity style={styles.btnPrimary} onPress={onComenzar} activeOpacity={0.85}>
+      <TouchableOpacity style={styles.btnPrimary} onPress={onIrARutas} activeOpacity={0.85}>
         <Ionicons name="add-circle-outline" size={18} color="#0D1B3E" />
-        <Text style={styles.btnPrimaryText}>Crear ruta</Text>
+        <Text style={styles.btnPrimaryText}>Ir a Rutas</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
 // ─── Formulario de ubicación (padre) ─────────────────────────────────────────
-function FormularioUbicacion({ onGuardar, onCancelar }) {
-  const [provincia, setProvincia] = useState('');
-  const [distrito, setDistrito] = useState('');
-  const [corregimiento, setCorregimiento] = useState('');
-  const [numeroCasa, setNumeroCasa] = useState('');
-  const [comentario, setComentario] = useState('');
+function FormularioUbicacion({ ubicacionInicial = null, onGuardar, onCancelar }) {
+  const [provincia, setProvincia] = useState(ubicacionInicial?.provincia || '');
+  const [distrito, setDistrito] = useState(ubicacionInicial?.distrito || '');
+  const [corregimiento, setCorregimiento] = useState(ubicacionInicial?.corregimiento || '');
+  const [numeroCasa, setNumeroCasa] = useState(ubicacionInicial?.numero_casa || ubicacionInicial?.numeroCasa || '');
+  const [comentario, setComentario] = useState(ubicacionInicial?.comentario || '');
   const [paso, setPaso] = useState('form');
   const [dropdownOpen, setDropdownOpen] = useState(null);
+  const [guardando, setGuardando] = useState(false);
 
   const distritosDisp = DISTRITOS[provincia] ?? [];
   const corregimientosDisp = CORREGIMIENTOS[distrito] ?? [];
@@ -990,14 +1431,18 @@ function FormularioUbicacion({ onGuardar, onCancelar }) {
   );
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <TouchableOpacity onPress={onCancelar} style={styles.btnBack}>
           <Ionicons name="arrow-back-outline" size={18} color="#0D1B3E" />
-          <Text style={styles.btnBackText}>Atrás</Text>
+          <Text style={styles.btnBackText}>{ubicacionInicial ? 'Cancelar' : 'Atrás'}</Text>
         </TouchableOpacity>
-        <Text style={styles.formTitle}>Ubicación de recogida</Text>
-        <Text style={styles.formDesc}>El conductor llegará a esta dirección para recoger a tus hijos.</Text>
+        <Text style={styles.formTitle}>{ubicacionInicial ? 'Editar ubicación' : 'Ubicación de recogida'}</Text>
+        <Text style={styles.formDesc}>
+          {ubicacionInicial
+            ? 'Actualiza la dirección donde el conductor recogerá a tus hijos.'
+            : 'El conductor llegará a esta dirección para recoger a tus hijos.'}
+        </Text>
 
         <View style={styles.modoToggle}>
           <TouchableOpacity style={[styles.modoBtn, paso === 'form' && styles.modoBtnActive]} onPress={() => setPaso('form')}>
@@ -1045,267 +1490,35 @@ function FormularioUbicacion({ onGuardar, onCancelar }) {
         <TextInput style={[styles.input, styles.inputMultiline]} placeholder="Ej: Frente al parque, portón azul..." placeholderTextColor="#aaa" value={comentario} onChangeText={setComentario} multiline numberOfLines={3} textAlignVertical="top" />
 
         <TouchableOpacity
-          style={[styles.btnPrimary, !puedeGuardar && styles.btnDisabled]}
-          onPress={() => { if (!puedeGuardar) return; onGuardar({ provincia, distrito, corregimiento, numeroCasa, comentario }); }}
+          style={[styles.btnPrimary, (!puedeGuardar || guardando) && styles.btnDisabled]}
+          onPress={async () => {
+            if (!puedeGuardar || guardando) return;
+            setGuardando(true);
+            try {
+              const token = await auth.currentUser.getIdToken();
+              await api.patch('/api/auth/ubicacion', { provincia, distrito, corregimiento }, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              onGuardar({ provincia, distrito, corregimiento, numeroCasa, comentario });
+            } catch (error) {
+              Alert.alert('Error', error.response?.data?.error || 'No se pudo guardar la ubicación');
+            } finally {
+              setGuardando(false);
+            }
+          }}
           activeOpacity={puedeGuardar ? 0.85 : 1}
         >
-          <Ionicons name="checkmark-circle-outline" size={18} color="#0D1B3E" />
-          <Text style={styles.btnPrimaryText}>Guardar dirección</Text>
+          {guardando ? (
+            <ActivityIndicator size="small" color="#0D1B3E" />
+          ) : (
+            <Ionicons name="checkmark-circle-outline" size={18} color="#0D1B3E" />
+          )}
+          <Text style={styles.btnPrimaryText}>{guardando ? 'Guardando...' : 'Guardar dirección'}</Text>
         </TouchableOpacity>
+        <View style={{ height: 40 }} />
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
-}
-
-// ─── Formulario de ruta (conductor) ──────────────────────────────────────────
-function FormularioRuta({ cuentasGuardadas, onGuardarNuevaCuenta, onPublicar, onCancelar }) {
-  // Estados de los campos de la ruta
-  const [escuelaSeleccionada, setEscuelaSeleccionada] = useState('');
-  const [mostrarModalEscuelas, setMostrarModalEscuelas] = useState(false); // Control para la lista desplegable
-  const [zonasTexto, setZonasTexto] = useState('');
-  const [tarifaMensual, setTarifaMensual] = useState(''); // Estado para el Input de Tarifa
-
-  // Estados para la información bancaria (Wallet de referencia)
-  const [cuentaSeleccionada, setCuentaSeleccionada] = useState(cuentasGuardadas[0] || null);
-  const [modoNuevaCuenta, setModoNuevaCuenta] = useState(cuentasGuardadas.length === 0);
-  const [nombreTitular, setNombreTitular] = useState('');
-  const [numeroCuenta, setNumeroCuenta] = useState('');
-  const [bancoNombre, setBancoNombre] = useState('Banco General');
-
-  const manejarPublicar = () => {
-    if (!escuelaSeleccionada || !zonasTexto || !tarifaMensual) {
-      Alert.alert("Campos incompletos", "Por favor llena todos los campos de la ruta.");
-      return;
-    }
-
-    // Convertir el texto libre en arreglo usando las comas
-    const arregloZonas = zonasTexto
-      .split(',')
-      .map(zona => zona.trim())
-      .filter(zona => zona.length > 0);
-
-    if (arregloZonas.length === 0) {
-      Alert.alert("Zonas inválidas", "Escribe al menos una zona de servicio.");
-      return;
-    }
-
-    // Procesar información bancaria
-    let datosBancariosFinales = cuentaSeleccionada;
-
-    if (modoNuevaCuenta) {
-      if (!nombreTitular || !numeroCuenta) {
-        Alert.alert("Información Bancaria", "Por favor introduce los datos de tu cuenta para recibir los pagos.");
-        return;
-      }
-      const nuevaCta = {
-        id: Date.now().toString(),
-        nombre: nombreTitular,
-        numero: numeroCuenta,
-        banco: bancoNombre
-      };
-      onGuardarNuevaCuenta(nuevaCta);
-      datosBancariosFinales = nuevaCta;
-    }
-
-    // Publicar hacia el estado global de rutas
-    onPublicar({
-      id: Date.now().toString(),
-      escuela: escuelaSeleccionada,
-      zonas: arregloZonas, // Almacenado como arreglo para renderizar los chips celestes
-      tarifa: parseInt(tarifaMensual) || 0,
-      alumnos: 0,
-      activa: true,
-      bancoAsociado: datosBancariosFinales
-    });
-  };
-
-  return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-      style={{ flex: 1 }}
-    >
-      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionTitle}>Crear Nueva Ruta de Servicio</Text>
-        <Text style={styles.sectionSub}>Completa los detalles de tu oferta de transporte</Text>
-
-        {/* 1. ESCUELA (LISTA DESPLEGABLE / DROPDOWN MODAL) */}
-        <Text style={styles.inputLabel}>Escuela de Destino</Text>
-        <TouchableOpacity 
-          style={styles.dropdownSelector} 
-          onPress={() => setMostrarModalEscuelas(true)}
-          activeOpacity={0.8}
-        >
-          <Text style={[styles.dropdownSelectorText, !escuelaSeleccionada && { color: '#aaa' }]}>
-            {escuelaSeleccionada || "Selecciona una escuela de la lista..."}
-          </Text>
-          <Ionicons name="chevron-down-outline" size={18} color="#0D1B3E" />
-        </TouchableOpacity>
-
-        {/* 2. ZONAS DE COBERTURA (INPUT TEXT LIBRE - SEPARADO POR COMAS) */}
-        <Text style={[styles.inputLabel, { marginTop: 16 }]}>Zonas de Cobertura</Text>
-        <TextInput
-          style={styles.formInput}
-          placeholder="Ej. Arraiján, Vista Alegre, Nuevo Arraiján"
-          placeholderTextColor="#aaa"
-          value={zonasTexto}
-          onChangeText={setZonasTexto}
-        />
-        <Text style={styles.mapaNote}>Separa cada zona con una coma (,)</Text>
-
-        {/* 3. TARIFA MENSUAL (INPUT NUMÉRICO) */}
-        <Text style={[styles.inputLabel, { marginTop: 16 }]}>Tarifa Mensual por Estudiante </Text>
-        <TextInput
-          style={styles.formInput}
-          placeholder="Ej. 75"
-          placeholderTextColor="#aaa"
-          keyboardType="numeric"
-          value={tarifaMensual}
-          onChangeText={setTarifaMensual}
-        />
-
-        <View style={{ height: 1, backgroundColor: '#E3ECF7', marginVertical: 20 }} />
-
-        {/* 4. SECCIÓN INFORMACIÓN BANCARIA */}
-        <Text style={styles.sectionTitle}>Información de Cobros (ACH)</Text>
-        <Text style={styles.sectionSub}>Cuenta de referencia donde los padres pagarán la mensualidad</Text>
-
-        {!modoNuevaCuenta && cuentasGuardadas.length > 0 ? (
-          <View style={styles.bancoContainer}>
-            <Text style={{ fontSize: 11, color: '#888', fontWeight: 'bold', marginBottom: 6 }}>CUENTA SELECCIONADA PARA ESTA RUTA:</Text>
-            {cuentasGuardadas.map((cta) => {
-              const esMarcada = cuentaSeleccionada?.id === cta.id;
-              return (
-                <TouchableOpacity 
-                  key={cta.id}
-                  style={[styles.tarjetaBancoBox, esMarcada && styles.tarjetaBancoBoxActiva]}
-                  onPress={() => { setCuentaSeleccionada(cta); setModoNuevaCuenta(false); }}
-                >
-                  <Ionicons name="wallet-outline" size={22} color={esMarcada ? '#0D1B3E' : '#888'} />
-                  <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={styles.tarjetaBancoNombre}>{cta.nombre}</Text>
-                    <Text style={styles.tarjetaBancoNumero}>{cta.banco} • No. {cta.numero}</Text>
-                  </View>
-                  <Ionicons 
-                    name={esMarcada ? "checkmark-circle" : "ellipse-outline"} 
-                    size={20} 
-                    color={esMarcada ? "#0D1B3E" : "#ccc"} 
-                  />
-                </TouchableOpacity>
-              );
-            })}
-            <TouchableOpacity style={styles.btnAgregarOtraCuenta} onPress={() => {
-              // Limpiamos los campos al querer agregar otra
-              setNombreTitular('');
-              setNumeroCuenta('');
-              setModoNuevaCuenta(true);
-            }}>
-              <Ionicons name="add-circle-outline" size={16} color="#00AEEF" />
-              <Text style={styles.btnAgregarOtraCuentaText}>Registrar una cuenta nueva</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.bancoFormBox}>
-            <Text style={styles.inputLabel}>Nombre del Banco</Text>
-            <TextInput
-              style={styles.formInput}
-              placeholder="Ej. Banco General, Banistmo"
-              placeholderTextColor="#aaa"
-              value={bancoNombre}
-              onChangeText={setBancoNombre}
-            />
-
-            <Text style={[styles.inputLabel, { marginTop: 10 }]}>Nombre del Titular</Text>
-            <TextInput
-              style={styles.formInput}
-              placeholder="Ej. Carlos Mendoza"
-              placeholderTextColor="#aaa"
-              value={nombreTitular}
-              onChangeText={setNombreTitular}
-            />
-
-            <Text style={[styles.inputLabel, { marginTop: 10 }]}>Número de Cuenta</Text>
-            <TextInput
-              style={styles.formInput}
-              placeholder="Ej. 0372012345"
-              placeholderTextColor="#aaa"
-              keyboardType="numeric"
-              value={numeroCuenta}
-              onChangeText={setNumeroCuenta}
-            />
-
-            {/* NUEVO: Botón de confirmación e inclusión inmediata a la Wallet visual */}
-            <TouchableOpacity 
-              style={styles.btnConfirmarNuevaCta} 
-              onPress={() => {
-                if (!nombreTitular || !numeroCuenta || !bancoNombre) {
-                  Alert.alert("Campos Vacíos", "Por favor completa los datos de la cuenta bancaria.");
-                  return;
-                }
-                const nuevaCta = {
-                  id: Date.now().toString(),
-                  nombre: nombreTitular,
-                  numero: numeroCuenta,
-                  banco: bancoNombre
-                };
-                // Guardamos en el estado general del componente superior
-                onGuardarNuevaCuenta(nuevaCta);
-                // La dejamos seleccionada por defecto
-                setCuentaSeleccionada(nuevaCta);
-                // Apagamos el modo formulario para regresar a la billetera visual
-                setModoNuevaCuenta(false);
-              }}
-            >
-              <Ionicons name="checkmark-done-outline" size={16} color="#FFF" />
-              <Text style={styles.btnConfirmarNuevaCtaText}>Confirmar y Añadir Cuenta</Text>
-            </TouchableOpacity>
-
-            {cuentasGuardadas.length > 0 && (
-              <TouchableOpacity style={styles.btnCancelarNuevaCta} onPress={() => setModoNuevaCuenta(false)}>
-                <Text style={styles.btnCancelarNuevaCtaText}>Volver a tus cuentas guardadas</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-
-        {/* Botones de Guardado / Cancelado */}
-        <View style={{ flexDirection: 'row', gap: 12, marginTop: 30, marginBottom: 40 }}>
-          <TouchableOpacity style={[styles.btnPrimary, { flex: 2 }]} onPress={manejarPublicar}>
-            <Text style={styles.btnPrimaryText}>Publicar Ruta</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* COMPONENTE DROPDOWN (MODAL SELECCIONADOR DE ESCUELAS) */}
-        <Modal visible={mostrarModalEscuelas} transparent={true} animationType="fade">
-          <View style={styles.modalOverlay}>
-            <View style={styles.dropdownModalContent}>
-              <Text style={[styles.sectionTitle, { marginBottom: 12, paddingHorizontal: 10 }]}>Selecciona una Escuela</Text>
-              <FlatList
-                data={ESCUELAS_LISTA}
-                keyExtractor={(item) => item}
-                renderItem={({ item }) => (
-                  <TouchableOpacity 
-                    style={styles.dropdownItem} 
-                    onPress={() => {
-                      setEscuelaSeleccionada(item);
-                      setMostrarModalEscuelas(false);
-                    }}
-                  >
-                    <Text style={styles.dropdownItemText}>{item}</Text>
-                    {escuelaSeleccionada === item && <Ionicons name="checkmark" size={16} color="#0D1B3E" />}
-                  </TouchableOpacity>
-                )}
-              />
-              <TouchableOpacity style={styles.btnCerrarModal} onPress={() => setMostrarModalEscuelas(false)}>
-                <Text style={styles.btnCerrarModalText}>Cerrar</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-
-      </ScrollView>
-    </KeyboardAvoidingView>
-  );
-
 }
 
 // ─── Card de conductor ────────────────────────────────────────────────────────
@@ -1334,10 +1547,6 @@ function CardConductor({ conductor, onSolicitar }) {
             ))}
             <Text style={styles.ratingTexto}>{conductor.rating} ({conductor.reviews} reseñas)</Text>
           </View>
-        </View>
-        <View style={styles.tarifaBox}>
-          <Text style={styles.tarifaNum}>${conductor.tarifa}</Text>
-          <Text style={styles.tarifaMes}>/mes</Text>
         </View>
       </View>
       <View style={styles.conductorCardDivider} />
@@ -1403,36 +1612,6 @@ function CardRuta({ ruta }) {
     </View>
   );
 }
-
-// ─── Tab bar ──────────────────────────────────────────────────────────────────
-/*
-function TabBar({ insets, onLogout }) {
-  const tabs = [
-    { icon: 'home-outline', label: 'Inicio' },
-    { icon: 'map-outline', label: 'Viaje', active: true },
-    { icon: 'notifications-outline', label: 'Avisos' },
-    { icon: 'log-out-outline', label: 'Salir', onPress: onLogout, isLogout: true },
-  ];
-  return (
-    <View style={[styles.tabBar, { paddingBottom: insets.bottom + 10 }]}>
-      {tabs.map((tab, i) => (
-        <Pressable key={i} style={styles.tab} onPress={tab.onPress}>
-          {({ pressed }) => (
-            <>
-              <View style={tab.active || (tab.isLogout && pressed) ? styles.tabIconWrapActive : styles.tabIconWrap}>
-                <Ionicons name={tab.icon} size={20} color={tab.active || (tab.isLogout && pressed) ? '#0D1B3E' : '#aaa'} />
-              </View>
-              <Text style={tab.active || (tab.isLogout && pressed) ? styles.tabLabelActive : styles.tabLabel}>
-                {tab.label}
-              </Text>
-            </>
-          )}
-        </Pressable>
-      ))}
-    </View>
-  );
-}
-*/
 
 // ─── Estilos ──────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
@@ -1695,4 +1874,93 @@ const styles = StyleSheet.create({
   subtextEstudianteFila: { fontSize: 12, color: '#666', marginTop: 2 },
   btnIniciarViajeAccion: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#FFD700', borderRadius: 12, paddingVertical: 14, marginTop: 20 },
   btnIniciarViajeAccionText: { fontSize: 15, fontWeight: '700', color: '#0D1B3E' },
+
+  noConductoresZonaBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: '#F59E0B',
+    marginBottom: 20,
+  },
+  noConductoresZonaTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#B45309',
+    marginBottom: 4,
+  },
+  noConductoresZonaDesc: {
+    fontSize: 12,
+    color: '#D97706',
+    lineHeight: 18,
+  },
+  modalInput: {
+    backgroundColor: '#F5F8FC',
+    borderWidth: 1.5,
+    borderColor: '#E3ECF7',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: '#0D1B3E',
+    marginBottom: 14,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#0D1B3E',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  modalSub: {
+    fontSize: 13,
+    color: '#666',
+    lineHeight: 18,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 10,
+  },
+  btnModalCancelar: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: '#E3ECF7',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  btnModalCancelarText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#8A94A6',
+  },
+  btnModalGuardar: {
+    flex: 1,
+    backgroundColor: '#FFD700',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  btnModalGuardarText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0D1B3E',
+  },
+  modalContent: {
+    width: '100%',
+    backgroundColor: '#FFF',
+    borderRadius: 20,
+    padding: 22,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 6,
+  },
 });

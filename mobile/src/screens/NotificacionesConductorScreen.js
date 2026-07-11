@@ -50,7 +50,8 @@ function formatearFecha(fecha) {
   });
 }
 
-export default function NotificacionesConductorScreen({ navigation }) {
+export default function NotificacionesConductorScreen({ navigation, route }) {
+  const { usuario } = route.params;
   const formularioRef = useRef(null);
   const [mensaje, setMensaje] = useState('');
   const [seleccionado, setSeleccionado] = useState(null);
@@ -63,6 +64,12 @@ export default function NotificacionesConductorScreen({ navigation }) {
   const [asistentes, setAsistentes] = useState([]);
   const [estudianteSeleccionado, setEstudianteSeleccionado] = useState(null);
   const [cargandoAsistentes, setCargandoAsistentes] = useState(false);
+  const [rutas, setRutas] = useState([]);
+  const [rutaSeleccionada, setRutaSeleccionada] = useState(null);
+
+  const [recibidas, setRecibidas] = useState([]);
+  const [sinLeerRecibidas, setSinLeerRecibidas] = useState(0);
+  const [expandidaRecibida, setExpandidaRecibida] = useState(null);
 
   const cargarHistorial = useCallback(async (mostrarCarga = false) => {
     if (mostrarCarga) setCargando(true);
@@ -80,40 +87,159 @@ export default function NotificacionesConductorScreen({ navigation }) {
     }
   }, []);
 
-  useEffect(() => {
-    cargarHistorial(true);
-  }, [cargarHistorial]);
-
-  const cargarAsistentes = useCallback(async () => {
-    setCargandoAsistentes(true);
+  const cargarRecibidas = useCallback(async (mostrarCarga = false) => {
+    if (mostrarCarga) setCargando(true);
     try {
       const token = await auth.currentUser.getIdToken();
-      const response = await api.get('/api/notificaciones/conductor/asistentes', {
+      const response = await api.get('/api/notificaciones/conductor/recibidas', {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const lista = response.data.asistentes || [];
-      setAsistentes(lista);
-      return lista;
+      setRecibidas(response.data.notificaciones || []);
+      setSinLeerRecibidas(response.data.sinLeer || 0);
+    } catch (error) {
+      console.log('Error al cargar notificaciones recibidas:', error.response?.data || error.message);
+    } finally {
+      setCargando(false);
+      setRefrescando(false);
+    }
+  }, []);
+
+  const cargarRutas = useCallback(async () => {
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const response = await api.get('/api/conductor/rutas', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setRutas(response.data.rutas || []);
+    } catch (error) {
+      console.log('Error al cargar rutas del conductor:', error.message);
+    }
+  }, []);
+
+  const marcarRecibidaLeida = async (id) => {
+    setRecibidas((prev) =>
+      prev.map((n) => (n._id === id ? { ...n, leida: true } : n))
+    );
+    try {
+      const token = await auth.currentUser.getIdToken();
+      await api.patch(`/api/notificaciones/conductor/${id}/leida`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setSinLeerRecibidas((prev) => Math.max(0, prev - 1));
+    } catch (error) {
+      setRecibidas((prev) =>
+        prev.map((n) => (n._id === id ? { ...n, leida: false } : n))
+      );
+      console.log('No se pudo marcar el aviso:', error.response?.data || error.message);
+    }
+  };
+
+  const handleToggleRecibida = (id) => {
+    if (expandidaRecibida === id) {
+      setExpandidaRecibida(null);
+      return;
+    }
+    setExpandidaRecibida(id);
+    marcarRecibidaLeida(id);
+  };
+
+  const marcarTodasRecibidasLeidas = async () => {
+    try {
+      const token = await auth.currentUser.getIdToken();
+      await api.patch('/api/notificaciones/conductor/marcar-leidas/todas', {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setRecibidas((prev) => prev.map((n) => ({ ...n, leida: true })));
+      setSinLeerRecibidas(0);
+    } catch (error) {
+      console.log('Error marking all received notifications as read:', error.response?.data || error.message);
+    }
+  };
+
+  useEffect(() => {
+    cargarHistorial(true);
+    cargarRecibidas(true);
+    cargarRutas();
+  }, [cargarHistorial, cargarRecibidas, cargarRutas]);
+
+  useEffect(() => {
+    if (tab === 'recibidos' && sinLeerRecibidas > 0) {
+      marcarTodasRecibidasLeidas();
+    }
+  }, [tab, sinLeerRecibidas]);
+
+  const cargarAsistentes = useCallback(async (tipoParam, selectedRutaId = null) => {
+    setCargandoAsistentes(true);
+    const targetTipo = tipoParam || audiencia;
+    const targetRutaId = selectedRutaId || rutaSeleccionada?._id;
+    try {
+      const token = await auth.currentUser.getIdToken();
+      if (targetTipo === 'individual') {
+        const response = await api.get('/api/conductor/estudiantes', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const lista = (response.data?.estudiantes || []).map(e => ({
+          _id: e._id,
+          nombre: `${e.nombre} ${e.apellido || ''}`.trim(),
+          padre: e.padre_id,
+        }));
+        setAsistentes(lista);
+        return lista;
+      } else {
+        const url = targetRutaId
+          ? `/api/notificaciones/conductor/asistentes?ruta_id=${targetRutaId}`
+          : '/api/notificaciones/conductor/asistentes';
+        const response = await api.get(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const lista = response.data.asistentes || [];
+        setAsistentes(lista);
+        return lista;
+      }
     } catch (error) {
       setAsistentes([]);
-      Alert.alert('Error', error.response?.data?.error || 'No se pudieron cargar los asistentes.');
+      Alert.alert('Error', error.response?.data?.error || 'No se pudieron cargar los destinatarios.');
       return null;
     } finally {
       setCargandoAsistentes(false);
     }
-  }, []);
+  }, [audiencia, rutaSeleccionada]);
 
   const seleccionarAudiencia = async (tipo) => {
     setAudiencia(tipo);
     setEstudianteSeleccionado(null);
+    setRutaSeleccionada(null);
 
-    if (tipo === 'asistentes' || tipo === 'individual') {
-      const lista = await cargarAsistentes();
-      if (lista && lista.length === 0) {
-        const mensaje = tipo === 'individual'
-          ? 'No se encuentran estudiantes a bordo para enviar un mensaje de emergencia.'
-          : 'No se encontraron estudiantes a bordo para enviar el aviso.';
-        Alert.alert('Sin estudiantes a bordo', mensaje);
+    if (tipo === 'individual') {
+      await cargarAsistentes('individual');
+    } else if (tipo === 'asistentes') {
+      if (rutas.length > 1) {
+        const botones = rutas.slice(0, 3).map(r => ({
+          text: r.nombre_ruta || r.nombre || r.escuela,
+          onPress: async () => {
+            setRutaSeleccionada(r);
+            const lista = await cargarAsistentes('asistentes', r._id);
+            if (lista && lista.length === 0) {
+              Alert.alert('Sin estudiantes', `No hay estudiantes asistentes en la ruta de ${r.nombre_ruta || r.nombre}.`);
+            }
+          }
+        }));
+        
+        Alert.alert(
+          'Seleccionar Viaje/Ruta',
+          '¿De cuál de tus rutas deseas cargar los estudiantes asistentes de hoy?',
+          [
+            ...botones,
+            { text: 'Cancelar', style: 'cancel', onPress: () => { setAudiencia('todos'); setRutaSeleccionada(null); } }
+          ]
+        );
+      } else {
+        const r = rutas[0];
+        setRutaSeleccionada(r || null);
+        const lista = await cargarAsistentes('asistentes', r?._id || null);
+        if (lista && lista.length === 0) {
+          Alert.alert('Sin estudiantes', 'No hay estudiantes asistentes en tu ruta.');
+        }
       }
     }
   };
@@ -138,6 +264,7 @@ export default function NotificacionesConductorScreen({ navigation }) {
           mensaje: mensaje.trim(),
           audiencia,
           estudiante_id: audiencia === 'individual' ? estudianteSeleccionado : undefined,
+          ruta_id: (audiencia === 'asistentes' && rutaSeleccionada) ? rutaSeleccionada._id : undefined,
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -148,6 +275,7 @@ export default function NotificacionesConductorScreen({ navigation }) {
       setMensaje('');
       setSeleccionado(null);
       setEstudianteSeleccionado(null);
+      setRutaSeleccionada(null);
       await cargarHistorial();
       setTab('historial');
     } catch (error) {
@@ -163,16 +291,16 @@ export default function NotificacionesConductorScreen({ navigation }) {
       return;
     }
     if (audiencia === 'individual' && !estudianteSeleccionado) {
-      Alert.alert('Selecciona un estudiante', 'Elige al hijo asistente cuyo padre recibira la emergencia.');
+      Alert.alert('Selecciona un estudiante', 'Elige al estudiante cuyo padre recibirá la emergencia.');
       return;
     }
 
-    const asistente = asistentes.find((item) => item._id === estudianteSeleccionado);
+    const destinatarioObj = asistentes.find((item) => item._id === estudianteSeleccionado);
     const destino = audiencia === 'todos'
       ? 'todos los padres vinculados a tu ruta'
       : audiencia === 'asistentes'
-        ? 'los padres de los estudiantes asistentes de hoy'
-        : `el padre de ${asistente?.nombre || 'el estudiante seleccionado'}`;
+        ? `los padres de los estudiantes asistentes de la ruta ${rutaSeleccionada ? (rutaSeleccionada.nombre_ruta || rutaSeleccionada.nombre) : 'de hoy'}`
+        : `el padre de ${destinatarioObj?.nombre || 'el estudiante seleccionado'}`;
 
     Alert.alert(
       'Confirmar envío',
@@ -187,6 +315,7 @@ export default function NotificacionesConductorScreen({ navigation }) {
   const refrescar = () => {
     setRefrescando(true);
     cargarHistorial();
+    cargarRecibidas();
   };
 
   return (
@@ -209,6 +338,7 @@ export default function NotificacionesConductorScreen({ navigation }) {
           {[
             { key: 'enviar', label: 'Enviar aviso' },
             { key: 'historial', label: 'Historial' },
+            { key: 'recibidos', label: 'Avisos recibidos' },
           ].map((t) => (
             <TouchableOpacity
               key={t.key}
@@ -216,7 +346,9 @@ export default function NotificacionesConductorScreen({ navigation }) {
               onPress={() => setTab(t.key)}
               activeOpacity={0.8}
             >
-              <Text style={[s.tabLabel, tab === t.key && s.tabLabelActive]}>{t.label}</Text>
+              <Text style={[s.tabLabel, tab === t.key && s.tabLabelActive]}>
+                {t.label} {t.key === 'recibidos' && sinLeerRecibidas > 0 ? `(${sinLeerRecibidas})` : ''}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -260,7 +392,7 @@ export default function NotificacionesConductorScreen({ navigation }) {
                     <View>
                       <Text style={s.sectionTitle}>Seleccionar estudiante</Text>
                     </View>
-                    <TouchableOpacity style={s.refreshBtn} onPress={cargarAsistentes} disabled={cargandoAsistentes}>
+                    <TouchableOpacity style={s.refreshBtn} onPress={() => cargarAsistentes('individual')} disabled={cargandoAsistentes}>
                       <Ionicons name="refresh-outline" size={18} color="#0D1B3E" />
                     </TouchableOpacity>
                   </View>
@@ -293,6 +425,27 @@ export default function NotificacionesConductorScreen({ navigation }) {
                       </TouchableOpacity>
                     );
                   })}
+                </View>
+              )}
+
+              {audiencia === 'asistentes' && (
+                <View style={s.recipientSection}>
+                  <View style={s.recipientHeader}>
+                    <View style={{ flex: 1, marginRight: 10 }}>
+                      <Text style={s.sectionTitle}>Ruta seleccionada</Text>
+                      <Text style={{ fontSize: 13, color: '#0D1B3E', fontWeight: '600', marginTop: 4 }}>
+                        {rutaSeleccionada ? (rutaSeleccionada.nombre_ruta || rutaSeleccionada.nombre) : 'Ninguna seleccionada'}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: '#8A94A6', marginTop: 2 }}>
+                        {rutaSeleccionada ? `${rutaSeleccionada.escuela_nombre || rutaSeleccionada.escuela} · ${rutaSeleccionada.zona}` : 'Selecciona una ruta para notificar'}
+                      </Text>
+                    </View>
+                    {rutas.length > 1 && (
+                      <TouchableOpacity style={s.refreshBtn} onPress={() => seleccionarAudiencia('asistentes')}>
+                        <Ionicons name="swap-horizontal-outline" size={18} color="#0D1B3E" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
               )}
 
@@ -429,6 +582,74 @@ export default function NotificacionesConductorScreen({ navigation }) {
             ))}
           </ScrollView>
         )}
+
+        {tab === 'recibidos' && (
+          <ScrollView
+            contentContainerStyle={s.body}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={refrescando} onRefresh={refrescar} />}
+          >
+            {cargando ? (
+              <View style={s.loadingBox}>
+                <ActivityIndicator color="#00AEEF" />
+                <Text style={s.loadingText}>Cargando avisos...</Text>
+              </View>
+            ) : recibidas.length === 0 ? (
+              <View style={s.emptyBox}>
+                <Ionicons name="notifications-off-outline" size={44} color="#C8D6E5" />
+                <Text style={s.emptyText}>No tienes avisos aún</Text>
+                <Text style={s.emptySub}>Las solicitudes de los padres aparecerán aquí</Text>
+              </View>
+            ) : (
+              recibidas.map((n) => {
+                const abierta = expandidaRecibida === n._id;
+                return (
+                  <TouchableOpacity
+                    key={n._id}
+                    style={[s.notifCard, !n.leida && s.notifCardUnread]}
+                    onPress={() => handleToggleRecibida(n._id)}
+                    activeOpacity={0.85}
+                  >
+                    {!n.leida && <View style={s.unreadDot} />}
+                    <View style={[s.notifIcon, !n.leida && s.notifIconUnread]}>
+                      <Ionicons
+                        name="mail-unread-outline"
+                        size={20}
+                        color={n.leida ? '#00AEEF' : '#0D1B3E'}
+                      />
+                    </View>
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <View style={s.titleRow}>
+                        <Text style={s.conductorNombre}>Sistema de Solicitudes</Text>
+                        <Text style={s.tipoText}>Solicitud</Text>
+                      </View>
+                      <Text
+                        style={[s.notifTexto, !n.leida && s.notifTextoUnread]}
+                        numberOfLines={abierta ? undefined : 2}
+                      >
+                        {n.mensaje}
+                      </Text>
+                      {abierta && (
+                        <TouchableOpacity
+                          style={s.btnRedirigirMarketplace}
+                          onPress={() => navigation.navigate('Marketplace', { usuario })}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="open-outline" size={14} color="#0D1B3E" />
+                          <Text style={s.btnRedirigirMarketplaceText}>Ir a solicitudes</Text>
+                        </TouchableOpacity>
+                      )}
+                      <View style={s.metaRow}>
+                        <Ionicons name="time-outline" size={12} color="#9AA4B2" />
+                        <Text style={s.fechaText}>{formatearFecha(n.fecha)}</Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })
+            )}
+          </ScrollView>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -552,4 +773,54 @@ const s = StyleSheet.create({
   histPadres: { fontSize: 11, color: '#0D1B3E', fontWeight: '700' },
   emptyBox: { alignItems: 'center', paddingTop: 48, gap: 12 },
   emptyText: { fontSize: 14, color: '#8A94A6' },
+  notifCard: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 12,
+    backgroundColor: '#F5F8FC', borderRadius: 14,
+    borderWidth: 1.5, borderColor: '#E3ECF7',
+    padding: 14, marginBottom: 10,
+    position: 'relative',
+  },
+  notifCardUnread: {
+    borderColor: '#FFD700',
+    backgroundColor: '#FFFDF6',
+  },
+  unreadDot: {
+    position: 'absolute',
+    left: 6, top: 22,
+    width: 6, height: 6,
+    borderRadius: 3,
+    backgroundColor: '#FF3B30',
+  },
+  notifIcon: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: '#EFF8FF', alignItems: 'center', justifyContent: 'center',
+  },
+  notifIconUnread: {
+    backgroundColor: '#FFF9D0',
+  },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5, gap: 8 },
+  conductorNombre: { fontSize: 13, fontWeight: '700', color: '#0D1B3E' },
+  tipoText: { fontSize: 10, color: '#00AEEF', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  notifTexto: { fontSize: 13, color: '#555', lineHeight: 18, marginBottom: 8 },
+  notifTextoUnread: { color: '#0D1B3E', fontWeight: '600' },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  fechaText: { fontSize: 11, color: '#8A94A6' },
+  btnRedirigirMarketplace: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    backgroundColor: '#FFD700',
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  btnRedirigirMarketplaceText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0D1B3E',
+  },
+  emptySub: { fontSize: 12, color: '#8A94A6', textAlign: 'center', marginTop: 2 },
 });

@@ -35,6 +35,7 @@ export default function RegisterScreen({ navigation, route }) {
   const [correo, setCorreo] = useState('');
   const [contrasena, setContrasena] = useState('');
   const [telefono, setTelefono] = useState('');
+  const [mostrarContrasena, setMostrarContrasena] = useState(false);
 
   // Foto de perfil (ambos)
   const [fotoPerfil, setFotoPerfil] = useState(null);
@@ -461,14 +462,19 @@ export default function RegisterScreen({ navigation, route }) {
       />
 
       <Text style={styles.label}>Contraseña *</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Mínimo 6 caracteres"
-        placeholderTextColor="#aaa"
-        value={contrasena}
-        onChangeText={setContrasena}
-        secureTextEntry
-      />
+      <View style={styles.passwordInputWrap}>
+        <TextInput
+          style={{ flex: 1, paddingVertical: 14, paddingHorizontal: 16, fontSize: 15, color: '#0D1B3E' }}
+          placeholder="Mínimo 6 caracteres"
+          placeholderTextColor="#aaa"
+          value={contrasena}
+          onChangeText={setContrasena}
+          secureTextEntry={!mostrarContrasena}
+        />
+        <TouchableOpacity onPress={() => setMostrarContrasena(!mostrarContrasena)}>
+          <Ionicons name={mostrarContrasena ? 'eye-off-outline' : 'eye-outline'} size={20} color="#888" />
+        </TouchableOpacity>
+      </View>
 
       {tipo === 'conductor' && (
         <>
@@ -832,6 +838,15 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: '#eee', borderRadius: 12,
     paddingVertical: 14, paddingHorizontal: 16,
     fontSize: 15, backgroundColor: '#f9fafb', color: '#0D1B3E',
+  },
+  passwordInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#eee',
+    borderRadius: 12,
+    backgroundColor: '#f9fafb',
+    paddingRight: 16,
   },
 
   // Foto de perfil

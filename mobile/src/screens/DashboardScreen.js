@@ -2,14 +2,13 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, TouchableOpacity, Pressable,
   StyleSheet, StatusBar, Alert,
-  ScrollView, useWindowDimensions, Image, Modal
+  ScrollView, useWindowDimensions, Image, Modal, AppState
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { signOut } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import api from '../config/api';
-import { registerAndSaveTokenAsync, addNotificationReceivedListener } from '../utils/notifications';
 
 export default function DashboardScreen({ navigation, route }) {
   const { usuario } = route.params;
@@ -25,7 +24,6 @@ export default function DashboardScreen({ navigation, route }) {
   const cargarAvisosSinLeer = useCallback(async () => {
     if (usuario.tipo !== 'padre') return;
     try {
-      if (!auth.currentUser) return;
       const token = await auth.currentUser.getIdToken();
       const response = await api.get('/api/notificaciones/padre', {
         headers: { Authorization: `Bearer ${token}` },
@@ -43,32 +41,98 @@ export default function DashboardScreen({ navigation, route }) {
     }
   }, [usuario.tipo]);
 
+  const [solicitudesConductor, setSolicitudesConductor] = useState([]);
+  const [notificacionesSinLeerConductor, setNotificacionesSinLeerConductor] = useState(0);
+  const [acuerdoPendientePago, setAcuerdoPendientePago] = useState(null);
+
+  const cargarSolicitudesConductor = useCallback(async () => {
+    if (usuario.tipo !== 'conductor') return;
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const response = await api.get('/api/solicitudes/recibidas', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setSolicitudesConductor(response.data.solicitudes || []);
+    } catch (error) {
+      console.log('No se pudo consultar solicitudes recibidas:', error.response?.data || error.message);
+    }
+  }, [usuario.tipo]);
+
+  const cargarNotificacionesConductor = useCallback(async () => {
+    if (usuario.tipo !== 'conductor') return;
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const response = await api.get('/api/notificaciones/conductor/recibidas', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setNotificacionesSinLeerConductor(response.data.sinLeer || 0);
+    } catch (error) {
+      console.log('No se pudo consultar notificaciones recibidas:', error.response?.data || error.message);
+    }
+  }, [usuario.tipo]);
+
+  const cargarAcuerdoPadre = useCallback(async () => {
+    if (usuario.tipo !== 'padre') return;
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const response = await api.get('/api/acuerdos/mis-acuerdos', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const activeAcuerdo = response.data?.acuerdo;
+      if (activeAcuerdo && activeAcuerdo.estado === 'activo' && !activeAcuerdo.stripe_subscription_id) {
+        setAcuerdoPendientePago(activeAcuerdo);
+      } else {
+        setAcuerdoPendientePago(null);
+      }
+    } catch (error) {
+      console.log('Error al cargar acuerdo del padre:', error.message);
+    }
+  }, [usuario.tipo]);
+
   useEffect(() => {
     cargarAvisosSinLeer();
-    if (usuario.tipo !== 'padre') return undefined;
-    const intervalo = setInterval(cargarAvisosSinLeer, 8000);
-    return () => clearInterval(intervalo);
-  }, [cargarAvisosSinLeer, usuario.tipo]);
+    cargarSolicitudesConductor();
+    cargarNotificacionesConductor();
+    cargarAcuerdoPadre();
 
-  useEffect(() => {
-    // Registrar token FCM al iniciar la sesión en Dashboard
-    registerAndSaveTokenAsync();
-
-    // Escuchar notificaciones en foreground
-    const subscription = addNotificationReceivedListener((notification) => {
-      const { title, body } = notification.request.content;
-      Alert.alert(title || 'Notificación', body || '');
-      if (usuario.tipo === 'padre') {
-        cargarAvisosSinLeer();
-      }
+    const unsubscribe = navigation.addListener('focus', () => {
+      cargarAvisosSinLeer();
+      cargarSolicitudesConductor();
+      cargarNotificacionesConductor();
+      cargarAcuerdoPadre();
     });
+    
+    let intervalo;
+    if (usuario.tipo === 'padre') {
+      intervalo = setInterval(() => {
+        cargarAvisosSinLeer();
+        cargarAcuerdoPadre();
+      }, 8000);
+    } else if (usuario.tipo === 'conductor') {
+      intervalo = setInterval(() => {
+        cargarSolicitudesConductor();
+        cargarNotificacionesConductor();
+      }, 8000);
+    }
 
-    return () => {
-      if (subscription && typeof subscription.remove === 'function') {
-        subscription.remove();
+    // Auto-refrescar cuando se regresa a la app desde segundo plano
+    const handleAppStateChange = (nextAppState) => {
+      if (nextAppState === 'active') {
+        cargarAvisosSinLeer();
+        cargarSolicitudesConductor();
+        cargarNotificacionesConductor();
+        cargarAcuerdoPadre();
       }
     };
-  }, [cargarAvisosSinLeer, usuario.tipo]);
+
+    const appStateSub = AppState.addEventListener('change', handleAppStateChange);
+    
+    return () => {
+      unsubscribe();
+      if (intervalo) clearInterval(intervalo);
+      appStateSub.remove();
+    };
+  }, [navigation, cargarAvisosSinLeer, cargarSolicitudesConductor, cargarNotificacionesConductor, cargarAcuerdoPadre, usuario.tipo]);
 
   const handleLogout = async () => {
     try {
@@ -109,6 +173,7 @@ export default function DashboardScreen({ navigation, route }) {
   ];
 
   const menu = usuario.tipo === 'conductor' ? menuConductor : menuPadre;
+  const solicitudesPendientes = solicitudesConductor.filter(s => s.estado === 'pendiente').length;
 
   const tabs = [
     { icon: 'home-outline', label: 'Inicio', active: true },
@@ -116,7 +181,7 @@ export default function DashboardScreen({ navigation, route }) {
     {
       icon: 'notifications-outline',
       label: 'Avisos',
-      badge: usuario.tipo === 'padre' ? avisosSinLeer : 0,
+      badge: usuario.tipo === 'padre' ? avisosSinLeer : notificacionesSinLeerConductor,
       onPress: () => navigation.navigate(
         usuario.tipo === 'conductor' ? 'Notificaciones' : 'Avisos',
         { usuario }
@@ -250,24 +315,56 @@ export default function DashboardScreen({ navigation, route }) {
             <View style={styles.bullet} />
           </TouchableOpacity>
 
+          {/* Alerta de pago pendiente (Padre) */}
+          {acuerdoPendientePago && (
+            <TouchableOpacity
+              style={styles.bannerPago}
+              onPress={() => navigation.navigate('Pagos', { usuario })}
+              activeOpacity={0.9}
+            >
+              <View style={styles.bannerPagoLeft}>
+                <Ionicons name="card-outline" size={20} color="#B45309" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.bannerPagoTitle}>Solicitud Aceptada</Text>
+                  <Text style={styles.bannerPagoDesc}>
+                    El conductor aceptó tu solicitud. Añade tu información de pago para activar la ruta.
+                  </Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#B45309" />
+            </TouchableOpacity>
+          )}
+
           {/* Menu */}
           <Text style={styles.sectionTitle}>Accesos rápidos</Text>
 
           <View style={styles.menuGrid}>
-            {menu.map((item, i) => (
-              <TouchableOpacity 
-                key={i} 
-                style={styles.menuCard} 
-                activeOpacity={0.85}
-                onPress={() => handleMenuPress(item)}
-              >
-                <View style={styles.menuIconCircle}>
-                  <Ionicons name={item.icon} size={24} color="#0D1B3E" />
-                </View>
-                <Text style={styles.menuLabel}>{item.label}</Text>
-                <Text style={styles.menuDesc}>{item.desc}</Text>
-              </TouchableOpacity>
-            ))}
+            {menu.map((item, i) => {
+              const esSolicitudesConductor = usuario.tipo === 'conductor' && item.screen === 'Marketplace';
+              const showBadge = esSolicitudesConductor && solicitudesPendientes > 0;
+
+              return (
+                <TouchableOpacity 
+                  key={i} 
+                  style={styles.menuCard} 
+                  activeOpacity={0.85}
+                  onPress={() => handleMenuPress(item)}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <View style={[styles.menuIconCircle, { marginBottom: 0 }]}>
+                      <Ionicons name={item.icon} size={24} color="#0D1B3E" />
+                    </View>
+                    {showBadge && (
+                      <View style={styles.menuBadge}>
+                        <Text style={styles.menuBadgeText}>{solicitudesPendientes} pendiente{solicitudesPendientes !== 1 ? 's' : ''}</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.menuLabel}>{item.label}</Text>
+                  <Text style={styles.menuDesc}>{item.desc}</Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
         </ScrollView>
@@ -628,5 +725,52 @@ const styles = StyleSheet.create({
     color: '#0D1B3E',
     fontWeight: 'bold',
     marginTop: 4,
+  },
+  menuBadge: {
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  menuBadgeText: {
+    color: '#0D1B3E',
+    fontSize: 9.5,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  bannerPago: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1.5,
+    borderColor: '#F59E0B',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 20,
+  },
+  bannerPagoLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+    marginRight: 8,
+  },
+  bannerPagoTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#B45309',
+    marginBottom: 2,
+  },
+  bannerPagoDesc: {
+    fontSize: 12,
+    color: '#D97706',
+    lineHeight: 16,
   },
 });

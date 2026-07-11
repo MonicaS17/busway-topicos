@@ -6,6 +6,7 @@ import {
   KeyboardAvoidingView, Platform, Modal
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import api from '../config/api';
@@ -17,6 +18,7 @@ export default function LoginScreen({ navigation }) {
   const [correo, setCorreo] = useState('');
   const [contrasena, setContrasena] = useState('');
   const [cargando, setCargando] = useState(false);
+  const [mostrarContrasena, setMostrarContrasena] = useState(false);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [correoRecuperacion, setCorreoRecuperacion] = useState('');
@@ -143,14 +145,19 @@ export default function LoginScreen({ navigation }) {
             />
 
             <Text style={styles.label}>Contraseña</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="••••••••"
-              placeholderTextColor="#aaa"
-              value={contrasena}
-              onChangeText={setContrasena}
-              secureTextEntry
-            />
+            <View style={styles.passwordInputWrap}>
+              <TextInput
+                style={{ flex: 1, paddingVertical: 14, paddingHorizontal: 16, fontSize: 15, color: '#0D1B3E' }}
+                placeholder="••••••••"
+                placeholderTextColor="#aaa"
+                value={contrasena}
+                onChangeText={setContrasena}
+                secureTextEntry={!mostrarContrasena}
+              />
+              <TouchableOpacity onPress={() => setMostrarContrasena(!mostrarContrasena)}>
+                <Ionicons name={mostrarContrasena ? 'eye-off-outline' : 'eye-outline'} size={20} color="#888" />
+              </TouchableOpacity>
+            </View>
 
             <TouchableOpacity onPress={() => setModalVisible(true)} style={{ alignSelf: 'center' }}>
               <Text style={styles.forgot}>¿Olvidaste tu contraseña?</Text>
@@ -307,6 +314,15 @@ const styles = StyleSheet.create({
     fontSize: 15,
     backgroundColor: '#f9fafb',
     color: '#0D1B3E',
+  },
+  passwordInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#eee',
+    borderRadius: 12,
+    backgroundColor: '#f9fafb',
+    paddingRight: 16,
   },
   forgot: {
     color: '#00AEEF',
