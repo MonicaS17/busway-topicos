@@ -38,10 +38,17 @@ export const api = {
   getConductorPerfil: () => apiFetch('/api/conductor/perfil'),
   getConductorEstudiantes: () => apiFetch('/api/conductor/estudiantes'),
   getConductorRutas: () => apiFetch('/api/conductor/rutas'),
-  getConductorViajes: () => apiFetch('/api/conductor/viajes'),
+  getConductorViajes: () => apiFetch('/api/viajes/historial'),
   getConductorPagos: () => apiFetch('/api/pagos/recibidos'),
-  // Padre
   getPadreHijos: () => apiFetch('/api/padre/mis-hijos'),
   getPadrePagos: () => apiFetch('/api/pagos/mis-pagos'),
+  actualizarPerfil: (data) =>
+    apiFetch('/api/auth/perfil/actualizar', { method: 'PATCH', body: JSON.stringify(data) }),
+  crearRutaConductor: (data) =>
+    apiFetch('/api/conductor/ruta', { method: 'POST', body: JSON.stringify(data) }),
+  actualizarRutaConductor: (id, data) =>
+    apiFetch(`/api/conductor/ruta/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  eliminarRutaConductor: (id) =>
+    apiFetch(`/api/conductor/ruta/${id}`, { method: 'DELETE' }),
 
 };

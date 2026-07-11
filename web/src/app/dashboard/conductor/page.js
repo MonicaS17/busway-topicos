@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import StatsCard from '@/components/dashboard/StatsCard';
-import { FiCreditCard, FiTruck, FiUsers } from 'react-icons/fi';
+import { FiCreditCard, FiTruck, FiUsers, FiLogOut } from 'react-icons/fi';
 import { api } from '@/lib/api';
 
 export default function ConductorDashboard() {
@@ -28,6 +28,13 @@ export default function ConductorDashboard() {
     ? `${perfil.usuario.nombre} ${perfil.usuario.apellido}`
     : 'Conductor';
 
+  const handleLogout = async () => {
+    localStorage.removeItem('busway_token');
+    localStorage.removeItem('busway_usuario');
+    await fetch('/api/logout', { method: 'POST' });
+    window.location.href = '/login';
+  };
+
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -43,12 +50,20 @@ export default function ConductorDashboard() {
           <h1 className="text-2xl font-extrabold text-navy">Hola, {nombre} 👋</h1>
           <p className="mt-1 text-sm text-slate-500">Consulta rutas, escuelas, estudiantes, perfil y pagos recibidos.</p>
         </div>
-        <Link
-          href="/dashboard/conductor/perfil"
-          className="rounded-md bg-busway-yellow px-5 py-2.5 text-sm font-extrabold text-navy"
-        >
-          Ver perfil
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            href="/dashboard/conductor/perfil"
+            className="rounded-md bg-busway-yellow px-5 py-2.5 text-sm font-extrabold text-navy hover:bg-yellow-400 transition shadow-sm"
+          >
+            Ver perfil
+          </Link>
+          <button
+            onClick={handleLogout}
+            className="inline-flex items-center gap-2 rounded-md bg-red-600 px-5 py-2.5 text-sm font-extrabold text-white shadow-sm transition hover:bg-red-700"
+          >
+            <FiLogOut size={16} /> Cerrar sesión
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
@@ -73,7 +88,9 @@ export default function ConductorDashboard() {
             <article key={ruta._id} className="rounded-md border border-slate-200 p-4">
               <h3 className="text-sm font-extrabold text-navy">{ruta.nombre}</h3>
               <p className="mt-1 text-xs text-slate-500">{ruta.escuela || 'Sin escuela registrada'}{ruta.zona ? ` · ${ruta.zona}` : ''}</p>
-              <p className="mt-3 text-sm font-bold text-busway-blue">{ruta.frecuencia || '—'}</p>
+              <p className="mt-3 text-sm font-bold text-busway-blue">
+                {Array.isArray(ruta.frecuencia) ? ruta.frecuencia.join(', ') : String(ruta.frecuencia || '—')}
+              </p>
             </article>
           ))}
           {rutas.length === 0 && (

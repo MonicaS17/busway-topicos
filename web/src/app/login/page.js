@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { FiLock, FiMail } from 'react-icons/fi';
+import { FiLock, FiMail, FiEye, FiEyeOff } from 'react-icons/fi';
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import Navbar from '@/components/Navbar';
@@ -13,6 +13,7 @@ export default function LoginPage() {
   const [form, setForm] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [correoRecuperacion, setCorreoRecuperacion] = useState('');
@@ -30,7 +31,13 @@ export default function LoginPage() {
       const token = await credencial.user.getIdToken();
 
       localStorage.setItem('busway_token', token);
-      document.cookie = `busway_token=${token}; path=/; max-age=3600`;
+      
+      // Establecer la cookie de sesion de manera segura (HttpOnly, Secure) en el servidor Next.js
+      await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
 
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`, {
         method: 'POST',
@@ -153,10 +160,10 @@ export default function LoginPage() {
                 </div>
               )}
 
-              <label className="block">
-                <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-navy">
+              <div className="space-y-1">
+                <label className="block text-xs font-bold uppercase tracking-wide text-navy">
                   Correo electrónico
-                </span>
+                </label>
                 <div className="relative">
                   <FiMail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                   <input
@@ -168,24 +175,31 @@ export default function LoginPage() {
                     className="w-full rounded-xl border border-slate-200 bg-slate-100 py-4 pl-12 pr-4 text-sm outline-none transition focus:border-busway-blue focus:bg-white"
                   />
                 </div>
-              </label>
+              </div>
 
-              <label className="block">
-                <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-navy">
+              <div className="space-y-1">
+                <label className="block text-xs font-bold uppercase tracking-wide text-navy">
                   Contraseña
-                </span>
+                </label>
                 <div className="relative">
                   <FiLock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                   <input
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     required
                     value={form.password}
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
                     placeholder="••••••••"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-100 py-4 pl-12 pr-4 text-sm outline-none transition focus:border-busway-blue focus:bg-white"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-100 py-4 pl-12 pr-12 text-sm outline-none transition focus:border-busway-blue focus:bg-white"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-navy transition"
+                  >
+                    {showPassword ? <FiEyeOff size={18} /> : <FiEye size={18} />}
+                  </button>
                 </div>
-              </label>
+              </div>
 
               <button
                 type="submit"

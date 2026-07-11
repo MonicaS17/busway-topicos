@@ -37,17 +37,23 @@ export default function Sidebar({ role = 'admin' }) {
   const [profile, setProfile] = useState({ name: '...', label: '', initials: '..', photoURL: null });
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('busway_usuario');
-      if (!raw) return;
-      const u = JSON.parse(raw);
-      const nombre = `${u.nombre} ${u.apellido}`;
-      const initials = `${u.nombre?.[0] ?? ''}${u.apellido?.[0] ?? ''}`.toUpperCase();
-      const label =
-        u.tipo === 'administrador' ? 'Administrador' :
-        u.tipo === 'conductor' ? 'Conductor' : 'Padre de familia';
-      setProfile({ name: nombre, label, initials, photoURL: u.foto_perfil ?? null });
-    } catch {}
+    const loadProfile = () => {
+      try {
+        const raw = localStorage.getItem('busway_usuario');
+        if (!raw) return;
+        const u = JSON.parse(raw);
+        const nombre = `${u.nombre} ${u.apellido}`;
+        const initials = `${u.nombre?.[0] ?? ''}${u.apellido?.[0] ?? ''}`.toUpperCase();
+        const label =
+          u.tipo === 'administrador' ? 'Administrador' :
+          u.tipo === 'conductor' ? 'Conductor' : 'Padre de familia';
+        setProfile({ name: nombre, label, initials, photoURL: u.foto_perfil ?? null });
+      } catch {}
+    };
+
+    loadProfile();
+    window.addEventListener('busway_profile_updated', loadProfile);
+    return () => window.removeEventListener('busway_profile_updated', loadProfile);
   }, []);
 
   const links =
@@ -55,10 +61,10 @@ export default function Sidebar({ role = 'admin' }) {
     role === 'conductor' ? conductorLinks :
     padreLinks;
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     localStorage.removeItem('busway_token');
     localStorage.removeItem('busway_usuario');
-    document.cookie = 'busway_token=; path=/; max-age=0';
+    await fetch('/api/logout', { method: 'POST' });
     router.push('/login');
   };
 

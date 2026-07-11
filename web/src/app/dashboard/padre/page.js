@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import StatsCard from '@/components/dashboard/StatsCard';
-import { FiCreditCard, FiDownload, FiUsers } from 'react-icons/fi';
+import { FiCreditCard, FiDownload, FiUsers, FiLogOut } from 'react-icons/fi';
 import { api } from '@/lib/api';
 
 export default function PadreDashboard() {
@@ -25,6 +25,13 @@ export default function PadreDashboard() {
   const ultimoPago = pagos[0];
   const nombre = usuario ? `${usuario.nombre} ${usuario.apellido}` : 'Padre';
 
+  const handleLogout = async () => {
+    localStorage.removeItem('busway_token');
+    localStorage.removeItem('busway_usuario');
+    await fetch('/api/logout', { method: 'POST' });
+    window.location.href = '/login';
+  };
+
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -40,12 +47,20 @@ export default function PadreDashboard() {
           <h1 className="text-2xl font-extrabold text-navy">Hola, {nombre} 👋</h1>
           <p className="mt-1 text-sm text-slate-500">Consulta tu perfil, hijos registrados e historial de pagos.</p>
         </div>
-        <Link
-          href="/dashboard/padre/perfil"
-          className="rounded-md bg-busway-yellow px-5 py-2.5 text-sm font-extrabold text-navy"
-        >
-          Ver perfil
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            href="/dashboard/padre/perfil"
+            className="rounded-md bg-busway-yellow px-5 py-2.5 text-sm font-extrabold text-navy hover:bg-yellow-400 transition shadow-sm"
+          >
+            Ver perfil
+          </Link>
+          <button
+            onClick={handleLogout}
+            className="inline-flex items-center gap-2 rounded-md bg-red-600 px-5 py-2.5 text-sm font-extrabold text-white shadow-sm transition hover:bg-red-700"
+          >
+            <FiLogOut size={16} /> Cerrar sesión
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

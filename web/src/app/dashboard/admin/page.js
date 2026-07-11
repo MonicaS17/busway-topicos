@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import StatsCard from '@/components/dashboard/StatsCard';
-import { FiAlertCircle, FiCheckCircle, FiFileText, FiTruck, FiUsers } from 'react-icons/fi';
+import { FiAlertCircle, FiCheckCircle, FiTruck, FiUsers, FiUser, FiLogOut } from 'react-icons/fi';
 import { api } from '@/lib/api';
 
 export default function AdminDashboard() {
@@ -17,24 +17,28 @@ export default function AdminDashboard() {
   useEffect(() => {
     Promise.all([api.getUsuarios(), api.getPagos()])
       .then(([usuariosData, pagosData]) => {
-        const usuarios = usuariosData.usuarios;
-        const conductoresActivos = usuarios.filter((u) => u.tipo === 'conductor' && u.estado === 'activo').length;
-        const padresRegistrados = usuarios.filter((u) => u.tipo === 'padre').length;
-        const bloqueados = usuarios.filter((u) => ['conductor', 'padre'].includes(u.tipo) && u.estado === 'bloqueado');
+        const users = usuariosData.usuarios || [];
+        const condActivos = users.filter((u) => u.tipo === 'conductor' && u.estado === 'activo').length;
+        const padresReg = users.filter((u) => u.tipo === 'padre').length;
+        const bloqueados = users.filter((u) => u.estado === 'bloqueado').map((u) => ({
+          id: u._id,
+          name: `${u.nombre} ${u.apellido}`,
+          detail: u.tipo === 'conductor' ? 'Conductor' : 'Padre',
+          status: 'Bloqueado',
+        }));
+        setBlockedUsers(bloqueados);
+
+        const totalPagos = pagosData.pagos || [];
+        const ingresos = totalPagos
+          .filter((p) => p.status === 'Exitoso')
+          .reduce((acc, curr) => acc + parseFloat(curr.monto?.replace('$', '') || 0), 0);
 
         setStats([
-          { title: 'Conductores activos', value: String(conductoresActivos), icon: <FiTruck />, color: '#1E88E5', sub: 'Total activos' },
-          { title: 'Padres registrados', value: String(padresRegistrados), icon: <FiUsers />, color: '#0D1B3D', sub: 'Total registrados' },
-          { title: 'Ingresos del mes', value: `$${pagosData.totalMes.toFixed(2)}`, icon: <FiCheckCircle />, color: '#10B981', sub: 'Pagos confirmados' },
-          { title: 'Cuentas bloqueadas', value: String(bloqueados.length), icon: <FiAlertCircle />, color: '#EF4444', sub: 'Conductores y padres' },
+          { title: 'Conductores activos', value: String(condActivos), icon: <FiTruck />, color: '#1E88E5', sub: 'Estado: activo' },
+          { title: 'Padres registrados', value: String(padresReg), icon: <FiUsers />, color: '#0D1B3D', sub: 'En plataforma' },
+          { title: 'Ingresos del mes', value: `$${ingresos.toFixed(2)}`, icon: <FiCheckCircle />, color: '#10B981', sub: 'Pagos confirmados' },
+          { title: 'Cuentas bloqueadas', value: String(bloqueados.length), icon: <FiAlertCircle />, color: '#EF4444', sub: 'Requieren revisión' },
         ]);
-
-        setBlockedUsers(bloqueados.slice(0, 5).map((usuario) => ({
-          id: usuario._id,
-          name: `${usuario.nombre} ${usuario.apellido}`,
-          detail: usuario.correo,
-          status: usuario.tipo === 'conductor' ? 'Conductor bloqueado' : 'Padre bloqueado',
-        })));
       })
       .catch(console.error);
   }, []);
@@ -45,6 +49,13 @@ export default function AdminDashboard() {
     { href: '/dashboard/admin/ingresos', label: 'Revisar ingresos', desc: 'Pagos mensuales y exportación.' },
   ];
 
+  const handleLogout = async () => {
+    localStorage.removeItem('busway_token');
+    localStorage.removeItem('busway_usuario');
+    await fetch('/api/logout', { method: 'POST' });
+    window.location.href = '/login';
+  };
+
   return (
     <div className="p-6 lg:p-8">
       <div className="mb-7 flex flex-wrap items-start justify-between gap-4">
@@ -52,9 +63,17 @@ export default function AdminDashboard() {
           <h1 className="mt-2 text-2xl font-extrabold text-navy">Inicio</h1>
           <p className="mt-1 text-sm text-slate-500">Resumen operativo de escuelas, usuarios e ingresos.</p>
         </div>
-        <Link href="/dashboard/admin/usuarios" className="inline-flex items-center gap-2 rounded-md bg-busway-yellow px-4 py-2.5 text-sm font-extrabold text-navy shadow-sm transition hover:bg-yellow-400">
-          <FiFileText size={16} /> Gestionar cuentas
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/dashboard/admin/perfil" className="inline-flex items-center gap-2 rounded-md bg-busway-yellow px-4 py-2.5 text-sm font-extrabold text-navy shadow-sm transition hover:bg-yellow-400">
+            <FiUser size={16} /> Ver Perfil
+          </Link>
+          <button
+            onClick={handleLogout}
+            className="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2.5 text-sm font-extrabold text-white shadow-sm transition hover:bg-red-700"
+          >
+            <FiLogOut size={16} /> Cerrar sesión
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
