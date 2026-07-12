@@ -4,6 +4,9 @@ const Usuario = require('../models/Usuario');
 const Notificacion = require('../models/Notificacion');
 const { sendPushNotification } = require('../utils/notificaciones');
 
+// Última posición GPS conocida por ruta, en memoria (sin persistencia ni TTL)
+const ultimaPosicionPorRuta = new Map();
+
 // ─── NOTIFICACIÓN ─────────────────────────────────────────────────────────
 // Función auxiliar para notificar al padre de un estudiante
 async function notificarPadre(hijo_id, viaje_id, tipo_evento, titulo, mensaje) {
@@ -57,6 +60,11 @@ module.exports = (io) => {
     socket.on('join:ruta', ({ id_ruta, rol }) => {
       socket.join(`sala:ruta:${id_ruta}`);
       console.log(`👤 Usuario [${rol}] se unió a la sala de la ruta: ${id_ruta}`);
+
+      const ultimaPosicion = ultimaPosicionPorRuta.get(id_ruta);
+      if (ultimaPosicion) {
+        socket.emit('padre:actualizar_mapa', ultimaPosicion);
+      }
     });
 
     // Obtener detalles de la ruta y estudiantes asignados
@@ -161,12 +169,9 @@ module.exports = (io) => {
 
     // Transmisión GPS en tiempo real
     socket.on('conductor:coordenadas', ({ id_ruta, lat, lng, velocidad }) => {
-      socket.to(`sala:ruta:${id_ruta}`).emit('padre:actualizar_mapa', {
-        lat,
-        lng,
-        velocidad,
-        timestamp: new Date()
-      });
+      const posicion = { lat, lng, velocidad, timestamp: new Date() };
+      ultimaPosicionPorRuta.set(id_ruta, posicion);
+      socket.to(`sala:ruta:${id_ruta}`).emit('padre:actualizar_mapa', posicion);
     });
 
     // Finalización de ruta
