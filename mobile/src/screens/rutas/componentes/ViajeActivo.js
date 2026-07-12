@@ -192,7 +192,7 @@ function ViajeActivoPadre({
             </MapView>
             <View style={styles.mapaFooter}>
               <Ionicons name="information-circle-outline" size={14} color="#888" />
-              <Text style={styles.mapaFooterText}>Actualización GPS cada 5 segundos · Socket.io</Text>
+              <Text style={styles.mapaFooterText}>Conexión segura y en vivo</Text>
             </View>
           </View>
         </>
