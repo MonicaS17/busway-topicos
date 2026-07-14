@@ -136,42 +136,6 @@ export default function ViajeScreen({ navigation, route }) {
   if (!usuario) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle-outline" size={40} color="#DC2626" />
-          <Text style={styles.errorTitle}>Datos de usuario no disponibles</Text>
-          <Text style={styles.errorSub}>Vuelve a ingresar a la pantalla para cargar la información.</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (viaje.loading) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#fff" />
-          <Text style={styles.loadingText}>Cargando información del viaje...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (viaje.error) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle-outline" size={40} color="#DC2626" />
-          <Text style={styles.errorTitle}>Error</Text>
-          <Text style={styles.errorSub}>{viaje.error}</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (esPadre && mostrarGrid && viaje.rawHijos) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle="light-content" backgroundColor="#0D1B3E" />
         <View style={styles.header}>
           <View style={styles.headerRow}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
@@ -179,66 +143,17 @@ export default function ViajeScreen({ navigation, route }) {
             </TouchableOpacity>
             <View style={styles.headerCenter}>
               <Text style={styles.headerSub}>BusWay</Text>
-              <Text style={styles.headerTitle}>Seguimiento</Text>
+              <Text style={styles.headerTitle}>{esPadre ? 'Seguimiento' : 'Viaje'}</Text>
             </View>
             <View style={{ width: 40 }} />
           </View>
         </View>
         <View style={styles.card}>
-          <ScrollView
-            contentContainerStyle={styles.gridBody}
-            showsVerticalScrollIndicator={false}
-            refreshControl={<RefreshControl refreshing={refrescandoGrid} onRefresh={alRefrescarGrid} />}
-          >
-            <Text style={styles.sectionLabel}>¿A qué hijo deseas acompañar hoy?</Text>
-            <View style={styles.gridDivider} />
-            {gruposPorRuta.map((grupo) => {
-              const info = infoGruposRuta[grupo.rutaId];
-              const badge = badgeFase(info?.fase);
-              const escuela = grupo.representante.ruta_id?.escuela || grupo.representante.ruta_id?.nombre_ruta || 'Escuela asignada';
-              return (
-                <TouchableOpacity
-                  key={grupo.rutaId}
-                  style={styles.tarjetaHijo}
-                  onPress={() => {
-                    setHijoSeleccionado(grupo.representante);
-                    setMostrarGrid(false);
-                  }}
-                >
-                  <View style={styles.tarjetaFilaSuperior}>
-                    <View style={styles.avatarGroupContainer}>
-                      <View style={styles.avatarGrupo}>
-                        <Text style={styles.avatarGrupoText}>{grupo.hijos[0].nombre.charAt(0)}</Text>
-                      </View>
-                      {grupo.hijos.length > 1 && (
-                        <View style={[styles.avatarGrupo, styles.avatarGrupoSecundario]}>
-                          <Text style={styles.avatarGrupoText}>{grupo.hijos[1].nombre.charAt(0)}</Text>
-                        </View>
-                      )}
-                    </View>
-                    <View style={styles.tarjetaInfo}>
-                      <Text style={styles.nombreGrupo}>{nombresGrupo(grupo.hijos)}</Text>
-                      <Text style={styles.escuelaGrupo}>{escuela}</Text>
-                    </View>
-                    <View style={[styles.badgeEstado, { backgroundColor: badge.bg }]}>
-                      <Text style={[styles.badgeEstadoText, { color: badge.color }]}>{badge.label}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.tarjetaDivider} />
-                  <View style={styles.tarjetaFilaInferior}>
-                    <Ionicons name="time-outline" size={14} color="#888" />
-                    <Text style={styles.entradaText}>
-                      {info === undefined
-                        ? 'Cargando horario...'
-                        : info.horaEntrada
-                          ? `Entrada a las ${info.horaEntrada}`
-                          : 'Horario no disponible'}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle-outline" size={40} color="#DC2626" />
+            <Text style={styles.errorTitle}>Datos de usuario no disponibles</Text>
+            <Text style={styles.errorSub}>Vuelve a ingresar a la pantalla para cargar la información.</Text>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -312,7 +227,7 @@ export default function ViajeScreen({ navigation, route }) {
         </View>
       </View>
 
-      {esPadre && uniqueRutas.length > 1 && (
+      {esPadre && uniqueRutas.length > 1 && !mostrarGrid && (
         <TouchableOpacity style={styles.cambiarHijoPill} onPress={() => setMostrarGrid(true)}>
           <Ionicons name="people-outline" size={16} color="#fff" />
           <Text style={styles.cambiarHijoPillText}>Cambiar de hijo</Text>
@@ -320,7 +235,75 @@ export default function ViajeScreen({ navigation, route }) {
       )}
 
       <View style={styles.card}>
-        {renderStep()}
+        {viaje.loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#0D1B3E" style={{ marginBottom: 10 }} />
+            <Text style={[styles.loadingText, { color: '#0D1B3E' }]}>Cargando información del viaje...</Text>
+          </View>
+        ) : viaje.error ? (
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle-outline" size={40} color="#DC2626" />
+            <Text style={styles.errorTitle}>Sin servicio activo</Text>
+            <Text style={styles.errorSub}>{viaje.error}</Text>
+          </View>
+        ) : esPadre && mostrarGrid && viaje.rawHijos ? (
+          <ScrollView
+            contentContainerStyle={styles.gridBody}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={refrescandoGrid} onRefresh={alRefrescarGrid} />}
+          >
+            <Text style={styles.sectionLabel}>¿A qué hijo deseas acompañar hoy?</Text>
+            <View style={styles.gridDivider} />
+            {gruposPorRuta.map((grupo) => {
+              const info = infoGruposRuta[grupo.rutaId];
+              const badge = badgeFase(info?.fase);
+              const escuela = grupo.representante.ruta_id?.escuela || grupo.representante.ruta_id?.nombre_ruta || 'Escuela asignada';
+              return (
+                <TouchableOpacity
+                  key={grupo.rutaId}
+                  style={styles.tarjetaHijo}
+                  onPress={() => {
+                    setHijoSeleccionado(grupo.representante);
+                    setMostrarGrid(false);
+                  }}
+                >
+                  <View style={styles.tarjetaFilaSuperior}>
+                    <View style={styles.avatarGroupContainer}>
+                      <View style={styles.avatarGrupo}>
+                        <Text style={styles.avatarGrupoText}>{grupo.hijos[0].nombre.charAt(0)}</Text>
+                      </View>
+                      {grupo.hijos.length > 1 && (
+                        <View style={[styles.avatarGrupo, styles.avatarGrupoSecundario]}>
+                          <Text style={styles.avatarGrupoText}>{grupo.hijos[1].nombre.charAt(0)}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <View style={styles.tarjetaInfo}>
+                      <Text style={styles.nombreGrupo}>{nombresGrupo(grupo.hijos)}</Text>
+                      <Text style={styles.escuelaGrupo}>{escuela}</Text>
+                    </View>
+                    <View style={[styles.badgeEstado, { backgroundColor: badge.bg }]}>
+                      <Text style={[styles.badgeEstadoText, { color: badge.color }]}>{badge.label}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.tarjetaDivider} />
+                  <View style={styles.tarjetaFilaInferior}>
+                    <Ionicons name="time-outline" size={14} color="#888" />
+                    <Text style={styles.entradaText}>
+                      {info === undefined
+                        ? 'Cargando horario...'
+                        : info.horaEntrada
+                          ? `Entrada a las ${info.horaEntrada}`
+                          : 'Horario no disponible'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        ) : (
+          renderStep()
+        )}
       </View>
     </SafeAreaView>
   );

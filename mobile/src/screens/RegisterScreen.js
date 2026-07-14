@@ -118,6 +118,11 @@ export default function RegisterScreen({ navigation, route }) {
       Alert.alert('Campo requerido', 'Por favor ingresa la placa del bus');
       return false;
     }
+    const placaRegex = /^\d{1,2}BC-\d{1,4}$/i;
+    if (!placaRegex.test(placa.trim())) {
+      Alert.alert('Placa inválida', 'El formato de placa de colegial es inválido. Ejemplos aceptados: 8BC-05, 4BC-89, 8BC-145, 13BC-720 o 8BC-3004.');
+      return false;
+    }
     if (!marca.trim()) {
       Alert.alert('Campo requerido', 'Por favor ingresa la marca del bus');
       return false;
@@ -130,8 +135,8 @@ export default function RegisterScreen({ navigation, route }) {
       Alert.alert('Año inválido', 'Por favor ingresa un año válido (ej: 2018)');
       return false;
     }
-    if (!numAsientos.trim() || isNaN(numAsientos)) {
-      Alert.alert('Campo requerido', 'Por favor ingresa el número de asientos');
+    if (!numAsientos.trim() || isNaN(numAsientos) || Number(numAsientos) <= 0 || Number(numAsientos) > 30) {
+      Alert.alert('Asientos inválidos', 'El número de asientos debe ser un valor positivo y el límite máximo es de 30 asientos.');
       return false;
     }
     return true;
@@ -235,7 +240,11 @@ export default function RegisterScreen({ navigation, route }) {
       if (modoCamara === 'cedula') procesarOCRCedula(texto);
       else if (modoCamara === 'licencia') procesarOCRLicencia(texto);
     } catch (_error) {
-      Alert.alert('Error', `No pudimos leer el documento: ${_error.message}`);
+      Alert.alert(
+        'Error', 
+        `No pudimos leer el documento: ${_error.message}`,
+        [{ text: 'Intentar de nuevo', onPress: () => { setCamaraActiva(true); } }]
+      );
     } finally {
       setCargando(false);
     }
@@ -261,9 +270,27 @@ export default function RegisterScreen({ navigation, route }) {
     const cedulaRegex = /\d{1,2}-\d{3,4}-\d{1,6}|E-\d{1,2}-\d{1,6}|PE-\d{3,4}-\d{1,6}/;
     const cedulaEncontrada = texto.match(cedulaRegex);
     if (!cedulaEncontrada) {
-      Alert.alert('No pudimos leer la cédula', 'Asegúrate de que la cédula esté bien iluminada y enfocada, luego intenta de nuevo');
+      Alert.alert(
+        'No pudimos leer la cédula', 
+        'Asegúrate de que la cédula esté bien iluminada y enfocada, luego intenta de nuevo',
+        [{ text: 'Intentar de nuevo', onPress: () => { setModoCamara('cedula'); setCamaraActiva(true); } }]
+      );
       return;
     }
+
+    // Extraer y validar que el nombre registrado coincida con el de la cédula
+    const textoMinus = texto.toLowerCase();
+    const nombreForm = nombre.toLowerCase().split(' ')[0];
+    const apellidoForm = apellido.toLowerCase().split(' ')[0];
+    if (!textoMinus.includes(nombreForm) && !textoMinus.includes(apellidoForm)) {
+      Alert.alert(
+        'Nombre no coincide',
+        'El nombre en la cédula no parece coincidir con el nombre registrado en el formulario.',
+        [{ text: 'Intentar de nuevo', onPress: () => { setModoCamara('cedula'); setCamaraActiva(true); } }]
+      );
+      return;
+    }
+
     setCedula(cedulaEncontrada[0]);
     setCedulaOcrValidada(true);
     Alert.alert('Cédula verificada', `Cédula detectada: ${cedulaEncontrada[0]}\nVerifica que sea correcta.`);
@@ -271,67 +298,147 @@ export default function RegisterScreen({ navigation, route }) {
 
   //OCR LICENCIA (solo conductor) 
   const procesarOCRLicencia = (texto) => {
-    const letrasPermitidas = ['E1', 'E2', 'E3'];
+    if (!cedulaOcrValidada) {
+      Alert.alert('Escanea tu cédula primero', 'Por favor realiza la verificación de tu cédula antes de escanear tu licencia.');
+      return;
+    }
+
+    // Validar coincidencia de nombre en la licencia
+    const textoMinus = texto.toLowerCase();
+    const nombreForm = nombre.toLowerCase().split(' ')[0];
+    const apellidoForm = apellido.toLowerCase().split(' ')[0];
+    if (!textoMinus.includes(nombreForm) && !textoMinus.includes(apellidoForm)) {
+      Alert.alert(
+        'Nombre no coincide',
+        'El nombre en la licencia de conducir no coincide con tu nombre registrado.',
+        [{ text: 'Intentar de nuevo', onPress: () => { setModoCamara('licencia'); setCamaraActiva(true); } }]
+      );
+      return;
+    }
+
+    // Validar coincidencia de número de cédula en la licencia
+    const cedulaRegex = /\d{1,2}-\d{3,4}-\d{1,6}|E-\d{1,2}-\d{1,6}|PE-\d{3,4}-\d{1,6}/;
+    const cedulaEnLicencia = texto.match(cedulaRegex);
+
+    if (!cedulaEnLicencia || cedulaEnLicencia[0] !== cedula) {
+      Alert.alert(
+        'Cédula no coincide',
+        `La cédula de la licencia (${cedulaEnLicencia ? cedulaEnLicencia[0] : 'No detectada'}) no coincide con la cédula verificada (${cedula}).\n\nAsegúrate de usar tu propia licencia.`,
+        [{ text: 'Intentar de nuevo', onPress: () => { setModoCamara('licencia'); setCamaraActiva(true); } }]
+      );
+      return;
+    }
+
+    // Verificar categoría reglamentaria (únicamente E2 y E3)
+    const letrasPermitidas = ['E2', 'E3'];
     const letraEncontrada = letrasPermitidas.find(l => texto.includes(l));
 
     if (!letraEncontrada) {
       Alert.alert(
         'Licencia no válida',
-        'Tu licencia no tiene una letra permitida para conducir buses escolares en Panamá.\n\nLetras permitidas: E1, E2, E3\n\nSi crees que es un error, asegúrate de que la licencia esté bien iluminada e intenta de nuevo.'
-      );
-      return;
-    }
-
-    const cedulaRegex = /\d{1,2}-\d{3,4}-\d{1,6}|E-\d{1,2}-\d{1,6}|PE-\d{3,4}-\d{1,6}/;
-    const cedulaEnLicencia = texto.match(cedulaRegex);
-
-    if (cedulaEnLicencia && cedula && cedulaEnLicencia[0] !== cedula) {
-      Alert.alert(
-        'Cédula no coincide',
-        `La cédula de la licencia (${cedulaEnLicencia[0]}) no coincide con la cédula que escaneaste (${cedula}).\n\nAsegúrate de usar tu propia licencia.`
+        'Tu licencia no cuenta con la categoría reglamentaria requerida (únicamente E2 o E3) para conducir buses de transporte colegial en Panamá.',
+        [{ text: 'Intentar de nuevo', onPress: () => { setModoCamara('licencia'); setCamaraActiva(true); } }]
       );
       return;
     }
 
     setLetraLicencia(letraEncontrada);
     setLicenciaOcrValidada(true);
-    Alert.alert('Licencia válida', `Tu licencia tiene letra ${letraEncontrada}, permitida para conducir buses escolares en Panamá.`);
+    Alert.alert('Licencia válida', `Tu licencia tiene la categoría ${letraEncontrada}, autorizada para conducir buses colegiales.`);
   };
 
   //REGISTRO FINAL
   const handleRegister = async () => {
     try {
       setCargando(true);
-      const userCredential = await createUserWithEmailAndPassword(auth, correo, contrasena);
+
+      // 1. Validar duplicados en el servidor antes de crear el usuario en Firebase Auth
+      try {
+        await api.post('/api/auth/check-register', {
+          correo,
+          cedula,
+          placa: tipo === 'conductor' ? placa : undefined
+        });
+      } catch (err) {
+        if (err.response) {
+          const isHtml = typeof err.response.data === 'string' && err.response.data.includes('<!DOCTYPE html>');
+          const isNgrokError = typeof err.response.data === 'string' && (err.response.data.includes('ngrok') || err.response.data.includes('Tunnel'));
+          
+          if (isNgrokError || (err.response.status === 404 && isHtml)) {
+            Alert.alert(
+              'Error de Conexión (ngrok)',
+              'No se pudo encontrar tu túnel de ngrok. Asegúrate de que el comando de ngrok esté corriendo en tu terminal y de que la URL en tu archivo mobile/.env coincida exactamente con la URL que te da la terminal.'
+            );
+          } else {
+            const msg = err.response.data?.error || `Error del servidor (Código: ${err.response.status}).`;
+            Alert.alert('Registro fallido', msg);
+          }
+        } else {
+          Alert.alert('Error de conexión', 'No pudimos verificar duplicados con el servidor.');
+        }
+        setCargando(false);
+        return;
+      }
+
+      // 2. Crear usuario en Firebase Auth
+      let userCredential;
+      try {
+        userCredential = await createUserWithEmailAndPassword(auth, correo, contrasena);
+      } catch (firebaseErr) {
+        Alert.alert('Error de registro', mensajeFirebase(firebaseErr.code) || firebaseErr.message);
+        setCargando(false);
+        return;
+      }
+
       const firebase_uid = userCredential.user.uid;
 
       // Si hay foto, se suba a cloudinary y se llama el url
       let fotoUrl = '';
       if (fotoPerfil) {
-        fotoUrl = await subirFotoACloudinary(fotoPerfil);
+        try {
+          fotoUrl = await subirFotoACloudinary(fotoPerfil);
+        } catch (uploadErr) {
+          console.warn('Error uploading profile picture:', uploadErr);
+        }
       }
 
-      await api.post('/api/auth/register', {
-        firebase_uid,
-        nombre,
-        apellido,
-        correo,
-        cedula,
-        tipo,
-        foto_perfil: fotoUrl,
-        datos_conductor: tipo === 'conductor' ? {
-          telefono,
-          cedula_ocr_validada: cedulaOcrValidada,
-          licencia_ocr_validada: licenciaOcrValidada,
-          estado_verificacion_att: 'aprobado',
-        } : null,
-        vehiculo: tipo === 'conductor' ? {
-          placa, marca, modelo,
-          anio: parseInt(anio, 10),
-          num_asientos: parseInt(numAsientos, 10),
-          estado_verificacion: 'aprobado',
-        } : null
-      });
+      // 3. Crear usuario en la Base de Datos
+      try {
+        await api.post('/api/auth/register', {
+          firebase_uid,
+          nombre,
+          apellido,
+          correo,
+          cedula,
+          tipo,
+          foto_perfil: fotoUrl,
+          datos_conductor: tipo === 'conductor' ? {
+            telefono,
+            cedula_ocr_validada: cedulaOcrValidada,
+            licencia_ocr_validada: licenciaOcrValidada,
+            estado_verificacion_att: 'aprobado',
+          } : null,
+          vehiculo: tipo === 'conductor' ? {
+            placa, marca, modelo,
+            anio: parseInt(anio, 10),
+            num_asientos: parseInt(numAsientos, 10),
+            estado_verificacion: 'aprobado',
+          } : null
+        });
+      } catch (dbErr) {
+        // ELIMINAR EL USUARIO DE FIREBASE SI LA CREACIÓN EN MONGODB FALLA (evita cuentas fantasma)
+        try {
+          await userCredential.user.delete();
+          console.log('Usuario de Firebase eliminado para evitar cuenta fantasma.');
+        } catch (deleteErr) {
+          console.error('Error al limpiar usuario de Firebase:', deleteErr);
+        }
+        
+        const msg = dbErr.response?.data?.error || 'No se pudo completar el registro en la base de datos.';
+        Alert.alert('Registro fallido', msg);
+        setCargando(false);
+        return;
+      }
 
       Alert.alert(
         '¡Registro exitoso!',
@@ -342,13 +449,7 @@ export default function RegisterScreen({ navigation, route }) {
       );
 
     } catch (error) {
-      if (error.response) {
-        Alert.alert('Error del Servidor', JSON.stringify(error.response.data));
-      } else if (error.request) {
-        Alert.alert('Error de Red', 'No se pudo conectar con el servidor de BusWay.');
-      } else {
-        Alert.alert('Error en el registro', error.message || mensajeFirebase(error.code));
-      }
+      Alert.alert('Error inesperado', 'Ocurrió un error al procesar el registro. Intenta de nuevo.');
       console.error('Register error:', error);
     } finally {
       setCargando(false);

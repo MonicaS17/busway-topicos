@@ -90,6 +90,34 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
       });
       setHijos(mappedHijos);
 
+      // Reconstruir lista completa de estudiantes para el mapa del padre
+      if (rutaData.estudiantes) {
+        setEstudiantes(rutaData.estudiantes.map((e, idx) => {
+          let estado = 'pendiente';
+          if (activeTrip && activeTrip.asistencias) {
+            const miAsistencia = activeTrip.asistencias.filter(a => a.hijo_id === e._id);
+            if (miAsistencia.length > 0) {
+              const ultima = miAsistencia[miAsistencia.length - 1];
+              if (ultima.tipo === 'subida' || ultima.tipo === 'abordado') estado = 'abordo';
+              else if (ultima.tipo === 'bajada' || ultima.tipo === 'entregado') estado = 'entregado';
+              else if (ultima.tipo === 'ausente') estado = 'ausente';
+            }
+          }
+          return {
+            id: e._id,
+            _id: e._id,
+            nombre: `${e.nombre} ${e.apellido || ''}`.trim(),
+            zona: e.zona || 'Arraiján',
+            qr: e.qr_code,
+            lat: e.lat,
+            lng: e.lng,
+            direccion: e.direccion,
+            orden: e.orden || (idx + 1),
+            estado
+          };
+        }));
+      }
+
       // Reconstruir fase desde la respuesta de la API
       if (rutaData.faseViaje) {
         setFaseViaje(rutaData.faseViaje);
@@ -468,6 +496,18 @@ export default function useViaje({ usuario, esPadre, selectedHijoId, selectedRut
       // Si se llama desde SCHOOL_CHECKIN el tipo es siempre 'vuelta',
       // independientemente del valor reactivo de tipoViaje en ese momento.
       const tipoEfectivo = currentStep === 'SCHOOL_CHECKIN' ? 'vuelta' : tipoViaje;
+
+      if (tipoEfectivo === 'vuelta') {
+        const algunEstudianteAsistiendo = estudiantes.some(e => e.estado === 'abordo');
+        if (!algunEstudianteAsistiendo) {
+          Alert.alert(
+            'No se puede iniciar la ruta',
+            'No puedes iniciar la ruta de regreso si no hay ningún estudiante a bordo (todos están ausentes o sin registrar asistencia).'
+          );
+          return;
+        }
+      }
+
       socketRef.current.emit('ruta:iniciar', {
         id_ruta: rutaData.rutaInfo._id,
         id_conductor: usuario._id,

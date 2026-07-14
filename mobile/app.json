@@ -24,6 +24,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.anonymous.mobile",
+      "softwareKeyboardLayoutMode": "adjustResize",
       "intentFilters": [
         {
           "action": "VIEW",
@@ -33,7 +34,10 @@
               "scheme": "busway"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -43,6 +47,11 @@
     "plugins": [
       "@react-native-community/datetimepicker",
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "d50e7a85-c122-4bae-82cb-0edda1aacd6b"
+      }
+    }
   }
 }

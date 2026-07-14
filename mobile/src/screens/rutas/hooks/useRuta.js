@@ -105,6 +105,7 @@ export default function useRuta({ usuario, esPadre, selectedHijoId, selectedRuta
             if (resRuta.data && resRuta.data.ruta) {
               rInfo = resRuta.data.ruta;
               setRutaInfo(rInfo);
+              setEstudiantes(resRuta.data.estudiantes || []);
             }
           } catch (err) {
             console.log('Error fetching route info:', err.message);

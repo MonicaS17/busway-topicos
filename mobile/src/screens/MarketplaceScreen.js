@@ -10,6 +10,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../config/firebase';
 import api from '../config/api';
+import MapView, { Marker } from 'react-native-maps';
 
 const PROVINCIAS = [
   'Panamá', 'Panamá Oeste', 'Colón', 'Coclé', 'Veraguas',
@@ -477,19 +478,63 @@ function MarketplacePadre({ ubicacion, onGuardarUbicacion, usuario, conductores,
 
       {tabActivo === 'catalogo' ? (
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-          <View style={styles.ubicacionSimple}>
-            <View style={styles.ubicacionIconCircle}>
-              <Ionicons name="location" size={18} color="#0D1B3E" />
+          <View style={styles.ubicacionPreviewCard}>
+            <View style={styles.ubicacionPreviewHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="location-sharp" size={18} color="#0D1B3E" />
+                <Text style={styles.ubicacionPreviewTitle}>Tu ubicación de recogida</Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.btnCambiarUbicacion} 
+                onPress={() => { setModoEdicion(false); setMostrarFormulario(true); }}
+              >
+                <Ionicons name="create-outline" size={12} color="#0D1B3E" />
+                <Text style={styles.btnCambiarUbicacionText}>Cambiar</Text>
+              </TouchableOpacity>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.ubicacionLabel}>Tu ubicación de recogida</Text>
-              <Text style={styles.ubicacionTexto} numberOfLines={1}>
-                {ubicacion?.corregimiento}, {ubicacion?.distrito} · {ubicacion?.provincia}
+
+            <View style={styles.ubicacionPreviewMapContainer}>
+              <MapView
+                style={StyleSheet.absoluteFillObject}
+                scrollEnabled={false}
+                zoomEnabled={false}
+                rotateEnabled={false}
+                pitchEnabled={false}
+                region={{
+                  latitude: Number(ubicacion?.lat) || 8.9833,
+                  longitude: Number(ubicacion?.lng) || -79.5167,
+                  latitudeDelta: 0.008,
+                  longitudeDelta: 0.008,
+                }}
+              >
+                <Marker
+                  coordinate={{
+                    latitude: Number(ubicacion?.lat) || 8.9833,
+                    longitude: Number(ubicacion?.lng) || -79.5167
+                  }}
+                  title="Mi ubicación"
+                />
+              </MapView>
+            </View>
+
+            <View style={styles.ubicacionPreviewDetails}>
+              <Text style={styles.ubicacionPreviewTextMain}>
+                {ubicacion?.corregimiento}, {ubicacion?.distrito}
               </Text>
+              <Text style={styles.ubicacionPreviewTextSub}>
+                Provincia: {ubicacion?.provincia}
+              </Text>
+              {ubicacion?.numero_casa ? (
+                <Text style={styles.ubicacionPreviewTextSub}>
+                  Casa/Apto: {ubicacion.numero_casa}
+                </Text>
+              ) : null}
+              {ubicacion?.comentario ? (
+                <Text style={styles.ubicacionPreviewTextSub} numberOfLines={2}>
+                  Indicaciones: {ubicacion.comentario}
+                </Text>
+              ) : null}
             </View>
-            <TouchableOpacity onPress={() => { setModoEdicion(true); setMostrarFormulario(true); }}>
-              <Text style={styles.cambiarLink}>Cambiar</Text>
-            </TouchableOpacity>
           </View>
 
           <View style={styles.searchBar}>
@@ -726,7 +771,7 @@ function PantallaSolicitud({ conductor, usuario, hijos, ubicacion, onEnviar, onC
             <Ionicons name="people-outline" size={32} color="#ccc" />
             <Text style={styles.emptyHijosTitle}>Sin hijos registrados</Text>
             <Text style={styles.emptyHijosDesc}>
-              Primero agrega un hijo en "Hijos y QR" desde el Dashboard.
+              Primero agrega un hijo en Hijos y QR desde el Dashboard.
             </Text>
           </View>
         ) : (
@@ -1392,9 +1437,24 @@ function FormularioUbicacion({ ubicacionInicial = null, onGuardar, onCancelar })
   const [corregimiento, setCorregimiento] = useState(ubicacionInicial?.corregimiento || '');
   const [numeroCasa, setNumeroCasa] = useState(ubicacionInicial?.numero_casa || ubicacionInicial?.numeroCasa || '');
   const [comentario, setComentario] = useState(ubicacionInicial?.comentario || '');
-  const [paso, setPaso] = useState('form');
+  const [lat, setLat] = useState(ubicacionInicial?.lat || 8.9833);
+  const [lng, setLng] = useState(ubicacionInicial?.lng || -79.5167);
   const [dropdownOpen, setDropdownOpen] = useState(null);
   const [guardando, setGuardando] = useState(false);
+
+  const autocompleteFromCoords = (latitude, longitude) => {
+    if (latitude > 9.0 && longitude < -79.6) {
+      setProvincia('Panamá');
+      setDistrito('Panamá');
+      setCorregimiento('Bella Vista');
+    } else {
+      setProvincia('Panamá Oeste');
+      setDistrito('Arraiján');
+      setCorregimiento('Vista Alegre');
+    }
+  };
+
+
 
   const distritosDisp = DISTRITOS[provincia] ?? [];
   const corregimientosDisp = CORREGIMIENTOS[distrito] ?? [];
@@ -1418,10 +1478,10 @@ function FormularioUbicacion({ ubicacionInicial = null, onGuardar, onCancelar })
           {opciones.map(op => (
             <TouchableOpacity
               key={op}
-              style={[styles.dropdownItem, value === op && styles.dropdownItemActive]}
+              style={[styles.dropdownModalItem, value === op && styles.dropdownItemActive]}
               onPress={() => { onSelect(op); onToggle(); }}
             >
-              <Text style={[styles.dropdownItemText, value === op && styles.dropdownItemTextActive]}>{op}</Text>
+              <Text style={[styles.dropdownModalItemText, value === op && styles.dropdownItemTextActive]}>{op}</Text>
               {value === op && <Ionicons name="checkmark-outline" size={14} color="#0D1B3E" />}
             </TouchableOpacity>
           ))}
@@ -1444,44 +1504,54 @@ function FormularioUbicacion({ ubicacionInicial = null, onGuardar, onCancelar })
             : 'El conductor llegará a esta dirección para recoger a tus hijos.'}
         </Text>
 
-        <View style={styles.modoToggle}>
-          <TouchableOpacity style={[styles.modoBtn, paso === 'form' && styles.modoBtnActive]} onPress={() => setPaso('form')}>
-            <Ionicons name="list-outline" size={16} color={paso === 'form' ? '#0D1B3E' : '#888'} />
-            <Text style={[styles.modoBtnText, paso === 'form' && styles.modoBtnTextActive]}>Por campos</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.modoBtn, paso === 'mapa' && styles.modoBtnActive]} onPress={() => setPaso('mapa')}>
-            <Ionicons name="map-outline" size={16} color={paso === 'mapa' ? '#0D1B3E' : '#888'} />
-            <Text style={[styles.modoBtnText, paso === 'mapa' && styles.modoBtnTextActive]}>En mapa</Text>
-          </TouchableOpacity>
+        <View style={{ marginBottom: 14 }}>
+          <Text style={styles.fieldLabel}>Coloca tu pin en el mapa de recogida</Text>
+          <View style={{ height: 200, borderRadius: 18, overflow: 'hidden', borderWidth: 1.5, borderColor: '#E3ECF7', marginBottom: 8 }}>
+            <MapView
+              style={StyleSheet.absoluteFillObject}
+              region={{
+                latitude: Number(lat),
+                longitude: Number(lng),
+                latitudeDelta: 0.015,
+                longitudeDelta: 0.015,
+              }}
+              onPress={(e) => {
+                const { latitude, longitude } = e.nativeEvent.coordinate;
+                setLat(latitude);
+                setLng(longitude);
+                autocompleteFromCoords(latitude, longitude);
+              }}
+            >
+              <Marker
+                coordinate={{ latitude: Number(lat), longitude: Number(lng) }}
+                draggable
+                onDragEnd={(e) => {
+                  const { latitude, longitude } = e.nativeEvent.coordinate;
+                  setLat(latitude);
+                  setLng(longitude);
+                  autocompleteFromCoords(latitude, longitude);
+                }}
+                title="Ubicación de Recogida"
+              />
+            </MapView>
+          </View>
+          <Text style={{ fontSize: 11, color: '#666', textAlign: 'center' }}>
+            Coordenadas: {Number(lat).toFixed(6)}°, {Number(lng).toFixed(6)}° (Presiona o arrastra)
+          </Text>
         </View>
 
-        {paso === 'form' ? (
-          <>
-            <DropdownField label="Provincia *" value={provincia} opciones={PROVINCIAS}
-              onSelect={(v) => { setProvincia(v); setDistrito(''); setCorregimiento(''); }}
-              abierto={dropdownOpen === 'provincia'} onToggle={() => setDropdownOpen(dropdownOpen === 'provincia' ? null : 'provincia')}
-              placeholder="Selecciona una provincia" />
-            <DropdownField label="Distrito *" value={distrito} opciones={distritosDisp}
-              onSelect={(v) => { setDistrito(v); setCorregimiento(''); }}
-              abierto={dropdownOpen === 'distrito'} onToggle={() => setDropdownOpen(dropdownOpen === 'distrito' ? null : 'distrito')}
-              placeholder="Selecciona un distrito" disabled={!provincia} />
-            <DropdownField label="Corregimiento *" value={corregimiento} opciones={corregimientosDisp}
-              onSelect={setCorregimiento}
-              abierto={dropdownOpen === 'corregimiento'} onToggle={() => setDropdownOpen(dropdownOpen === 'corregimiento' ? null : 'corregimiento')}
-              placeholder="Selecciona un corregimiento" disabled={!distrito} />
-          </>
-        ) : (
-          <View style={styles.mapaPlaceholder}>
-            <Ionicons name="map-outline" size={36} color="#0D1B3E" />
-            <Text style={styles.mapaPlaceholderTitle}>Selecciona en el mapa</Text>
-            <Text style={styles.mapaPlaceholderDesc}>Toca el mapa para colocar el pin en el punto exacto de recogida.</Text>
-            <View style={styles.mapaSimulado}>
-              <Ionicons name="location" size={32} color="#FF4444" />
-              <Text style={styles.coordsTexto}>8.9824° N, 79.5199° O — Arraján, Panamá Oeste</Text>
-            </View>
-            <Text style={styles.mapaNote}>La integración con Google Maps se activará en la versión de producción.</Text>
-          </View>
-        )}
+        <DropdownField label="Provincia *" value={provincia} opciones={PROVINCIAS}
+          onSelect={(v) => { setProvincia(v); setDistrito(''); setCorregimiento(''); }}
+          abierto={dropdownOpen === 'provincia'} onToggle={() => setDropdownOpen(dropdownOpen === 'provincia' ? null : 'provincia')}
+          placeholder="Selecciona una provincia" />
+        <DropdownField label="Distrito *" value={distrito} opciones={distritosDisp}
+          onSelect={(v) => { setDistrito(v); setCorregimiento(''); }}
+          abierto={dropdownOpen === 'distrito'} onToggle={() => setDropdownOpen(dropdownOpen === 'distrito' ? null : 'distrito')}
+          placeholder="Selecciona un distrito" disabled={!provincia} />
+        <DropdownField label="Corregimiento *" value={corregimiento} opciones={corregimientosDisp}
+          onSelect={setCorregimiento}
+          abierto={dropdownOpen === 'corregimiento'} onToggle={() => setDropdownOpen(dropdownOpen === 'corregimiento' ? null : 'corregimiento')}
+          placeholder="Selecciona un corregimiento" disabled={!distrito} />
 
         <View style={{ height: 1, backgroundColor: '#E3ECF7', marginVertical: 16 }} />
         <Text style={styles.fieldLabel}>N.º de casa / apartamento <Text style={styles.opcional}>(opcional)</Text></Text>
@@ -1496,10 +1566,26 @@ function FormularioUbicacion({ ubicacionInicial = null, onGuardar, onCancelar })
             setGuardando(true);
             try {
               const token = await auth.currentUser.getIdToken();
-              await api.patch('/api/auth/ubicacion', { provincia, distrito, corregimiento }, {
+              await api.patch('/api/auth/ubicacion', { 
+                provincia, 
+                distrito, 
+                corregimiento,
+                lat: Number(lat),
+                lng: Number(lng),
+                numero_casa: numeroCasa,
+                comentario
+              }, {
                 headers: { Authorization: `Bearer ${token}` },
               });
-              onGuardar({ provincia, distrito, corregimiento, numeroCasa, comentario });
+              onGuardar({ 
+                provincia, 
+                distrito, 
+                corregimiento, 
+                lat: Number(lat),
+                lng: Number(lng),
+                numero_casa: numeroCasa, 
+                comentario 
+              });
             } catch (error) {
               Alert.alert('Error', error.response?.data?.error || 'No se pudo guardar la ubicación');
             } finally {
@@ -1710,12 +1796,67 @@ const styles = StyleSheet.create({
   sectionSub: { fontSize: 12, color: '#888', marginTop: 2, marginBottom: 16 },
   sectionLabel: { fontSize: 13, fontWeight: '700', color: '#0D1B3E', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 },
 
-  // Ubicación sin fondo celeste
-  ubicacionSimple: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
-  ubicacionIconCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#FFD700', alignItems: 'center', justifyContent: 'center' },
-  ubicacionLabel: { fontSize: 11, color: '#888', marginBottom: 1 },
-  ubicacionTexto: { fontSize: 13, fontWeight: '600', color: '#0D1B3E' },
-  cambiarLink: { fontSize: 12, color: '#00AEEF', fontWeight: '600' },
+  // Ubicación Preview Card
+  ubicacionPreviewCard: {
+    backgroundColor: '#fff',
+    borderWidth: 1.5,
+    borderColor: '#E3ECF7',
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 20,
+    shadowColor: '#0D1B3E',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  ubicacionPreviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  ubicacionPreviewTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0D1B3E',
+  },
+  btnCambiarUbicacion: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F5F8FC',
+    borderWidth: 1,
+    borderColor: '#E3ECF7',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  btnCambiarUbicacionText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#0D1B3E',
+  },
+  ubicacionPreviewMapContainer: {
+    height: 120,
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E3ECF7',
+    marginBottom: 12,
+  },
+  ubicacionPreviewDetails: {
+    gap: 4,
+  },
+  ubicacionPreviewTextMain: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0D1B3E',
+  },
+  ubicacionPreviewTextSub: {
+    fontSize: 12,
+    color: '#666',
+  },
 
   // Conductor card
   conductorCard: { backgroundColor: '#F5F8FC', borderRadius: 18, borderWidth: 1.5, borderColor: '#E3ECF7', padding: 16, marginBottom: 14 },
@@ -1840,8 +1981,8 @@ const styles = StyleSheet.create({
   dropdownSelectorText: { fontSize: 14, color: '#0D1B3E', fontWeight: '500' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
   dropdownModalContent: { width: '100%', backgroundColor: '#FFF', borderRadius: 20, padding: 18, maxHeight: '60%', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 10, elevation: 6 },
-  dropdownItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 10, borderBottomWidth: 1, borderBottomColor: '#E3ECF7' },
-  dropdownItemText: { fontSize: 14, color: '#0D1B3E' },
+  dropdownModalItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 10, borderBottomWidth: 1, borderBottomColor: '#E3ECF7' },
+  dropdownModalItemText: { fontSize: 14, color: '#0D1B3E' },
   btnCerrarModal: { alignItems: 'center', backgroundColor: '#0D1B3E', borderRadius: 12, paddingVertical: 12, marginTop: 14 },
   btnCerrarModalText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
 

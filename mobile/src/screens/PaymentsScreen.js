@@ -784,7 +784,18 @@ function VistaConductor({ usuario, onRefreshUsuario }) {
                 }, {
                   headers: { Authorization: `Bearer ${token}` }
                 });
-                Alert.alert('Registro Exitoso', 'Tu información de cobro ha sido guardada correctamente.');
+                Alert.alert(
+                  'Registro Exitoso',
+                  'Tu información de cobro ha sido guardada correctamente. Tu ruta ha sido publicada en el Marketplace.',
+                  [
+                    {
+                      text: 'Ver en Marketplace',
+                      onPress: () => {
+                        navigation.navigate('Marketplace');
+                      }
+                    }
+                  ]
+                );
                 await onRefreshUsuario();
               } catch (err) {
                 console.error(err);

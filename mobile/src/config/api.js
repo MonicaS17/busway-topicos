@@ -6,7 +6,11 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.96.194.65:3000';
 const api = axios.create({
   baseURL: API_URL,
   timeout: 10000,
-  headers: { 'Content-Type': 'application/json' },
+  headers: { 
+    'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true',
+    'Bypass-Tunnel-Reminder': 'true'
+  },
 });
 
 export default api;

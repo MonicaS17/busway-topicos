@@ -45,7 +45,17 @@ export default function LoginScreen({ navigation }) {
 
     } catch (error) {
       if (error.response) {
-        Alert.alert('Error del Servidor', JSON.stringify(error.response.data));
+        const isHtml = typeof error.response.data === 'string' && error.response.data.includes('<!DOCTYPE html>');
+        const isNgrokError = typeof error.response.data === 'string' && (error.response.data.includes('ngrok') || error.response.data.includes('Tunnel'));
+        
+        if (isNgrokError || (error.response.status === 404 && isHtml)) {
+          Alert.alert(
+            'Error de Conexión (ngrok)',
+            'No se pudo encontrar tu túnel de ngrok. Asegúrate de que el comando de ngrok esté corriendo en tu terminal y de que la URL en tu archivo mobile/.env coincida exactamente con la URL de la terminal.'
+          );
+        } else {
+          Alert.alert('Error del Servidor', error.response.data?.error || `Error (${error.response.status})`);
+        }
       } else if (error.request) {
         Alert.alert('Error de Red', 'No se pudo conectar con el servidor backend de BusWay.');
       } else {

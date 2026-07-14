@@ -198,28 +198,10 @@ function RutaPadre({ navigation, usuario, route }) {
           { descripcion: `Punto de recogida — Tu hogar`, hora: rutaInfo.horario?.split('—')[0]?.trim() || '6:30 AM' },
           { descripcion: `Destino — ${destinoEscuela}`, hora: rutaInfo.horario?.split('—')[1]?.trim() || '7:15 AM' }
         ];
-        const paradasVueltaList = [
-          { descripcion: `Punto de recogida — ${destinoEscuela}`, hora: 'Salida de clases' },
-          { descripcion: `Destino — Tu hogar`, hora: 'Retorno a casa' }
-        ];
-
-        const formatFrecuencia = (frec) => {
-          if (!frec) return 'Lunes a Viernes';
-          if (typeof frec === 'string') return frec;
-          if (Array.isArray(frec)) {
-            const hasLaV = frec.length === 5 &&
-              frec.includes('Lunes') && frec.includes('Martes') &&
-              frec.includes('Miércoles') && frec.includes('Jueves') && frec.includes('Viernes');
-            if (hasLaV) return 'Lunes a Viernes';
-            if (frec.length === 7) return 'Todos los días';
-            return frec.join(', ');
-          }
-          return 'Lunes a Viernes';
-        };
 
         const paradasVueltaList = [
           { descripcion: `Punto de recogida — ${destinoEscuela}`, hora: 'Salida de clases' },
-          { descripcion: `Destino — Hogar de ${firstChild.nombre}`, hora: 'Retorno a casa' }
+          { descripcion: `Destino — Hogar de ${hijoSeleccionado.nombre}`, hora: 'Retorno a casa' }
         ];
 
         const formatFrecuencia = (frec) => {
@@ -647,6 +629,7 @@ function RutaConductor({ navigation, usuario }) {
 
   // Formulario de creación
   const [mostrarCrear, setMostrarCrear] = useState(false);
+  const [conductorVehiculo, setConductorVehiculo] = useState(null);
   const [formEscuelaId, setFormEscuelaId] = useState('');
   const [formNombreRuta, setFormNombreRuta] = useState('');
   const [formZona, setFormZona] = useState('');
@@ -708,9 +691,36 @@ function RutaConductor({ navigation, usuario }) {
     }
   };
 
-  const escuelasFiltradas = listaEscuelas.filter(esc =>
-    esc.nombre.toLowerCase().includes(busquedaEscuela.toLowerCase())
-  );
+  const obtenerProvinciaPorPlaca = (placa) => {
+    if (!placa) return null;
+    const match = placa.match(/^(\d{1,2})BC/i);
+    if (!match) return null;
+    const num = parseInt(match[1], 10);
+    switch (num) {
+      case 1: return 'Bocas del Toro';
+      case 2: return 'Coclé';
+      case 3: return 'Colón';
+      case 4: return 'Chiriquí';
+      case 5: return 'Darién';
+      case 6: return 'Herrera';
+      case 7: return 'Los Santos';
+      case 8: return 'Panamá';
+      case 9: return 'Veraguas';
+      case 10: return 'Guna Yala';
+      case 11: return 'Ngäbe-Buglé';
+      case 12: return 'Emberá-Wounaan';
+      case 13: return 'Panamá Oeste';
+      default: return null;
+    }
+  };
+
+  const provinciaConductor = conductorVehiculo ? obtenerProvinciaPorPlaca(conductorVehiculo.placa) : null;
+
+  const escuelasFiltradas = listaEscuelas.filter(esc => {
+    const matchesSearch = esc.nombre.toLowerCase().includes(busquedaEscuela.toLowerCase());
+    if (!provinciaConductor) return matchesSearch;
+    return matchesSearch && esc.provincia === provinciaConductor;
+  });
 
   const fetchConductorRutaYEstudiantes = async () => {
     try {
@@ -724,6 +734,18 @@ function RutaConductor({ navigation, usuario }) {
       }
 
       const token = await auth.currentUser.getIdToken();
+
+      // Obtener el perfil y vehículo del conductor para filtro por placa
+      try {
+        const resPerfil = await api.get('/api/auth/perfil', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (resPerfil.data && resPerfil.data.vehiculo) {
+          setConductorVehiculo(resPerfil.data.vehiculo);
+        }
+      } catch (err) {
+        console.log('Error fetching conductor profile/vehiculo:', err.message);
+      }
 
       // Obtener la ruta del conductor
       const resRuta = await api.get('/api/conductor/ruta', {
@@ -877,6 +899,9 @@ function RutaConductor({ navigation, usuario }) {
       }
       
       if (res.data && res.data.ruta) {
+        // Guardamos si era la primera ruta antes de refrescar el state local
+        const esPrimeraRuta = rutas.length === 0;
+
         await fetchConductorRutaYEstudiantes();
         
         // Limpiar formulario y cerrar
@@ -889,6 +914,23 @@ function RutaConductor({ navigation, usuario }) {
         setFormErrores({});
         setRutaIdEditando(null);
         setMostrarCrear(false);
+
+        if (esPrimeraRuta) {
+          Alert.alert(
+            '¡Ruta Creada!',
+            'Tu primera ruta ha sido creada con éxito. Ahora debes configurar tu cuenta de cobro para poder recibir pagos.',
+            [
+              {
+                text: 'Configurar Cobro',
+                onPress: () => {
+                  navigation.navigate('Payments');
+                }
+              }
+            ]
+          );
+        } else {
+          Alert.alert('Registro Exitoso', 'La ruta ha sido guardada correctamente.');
+        }
       }
     } catch (err) {
       console.error('Error al guardar ruta:', err);

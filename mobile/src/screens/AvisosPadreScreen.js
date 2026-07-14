@@ -69,11 +69,7 @@ export default function AvisosPadreScreen({ navigation }) {
     return () => clearInterval(intervalo);
   }, [cargarNotificaciones]);
 
-  useEffect(() => {
-    if (notificaciones.length > 0 && sinLeer > 0 && !marcandoTodas) {
-      marcarTodasLeidas();
-    }
-  }, [notificaciones, sinLeer, marcandoTodas]);
+
 
   const marcarLeida = async (id) => {
     setNotificaciones((prev) =>

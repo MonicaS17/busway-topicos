@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, TextInput,
   StyleSheet, StatusBar, ScrollView, Modal, Alert,
-  Image, ActivityIndicator, KeyboardAvoidingView, Platform
+  Image, ActivityIndicator, KeyboardAvoidingView, Platform, Share
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../config/firebase';
 import api from '../config/api';
+import * as FileSystem from 'expo-file-system/legacy';
 
 export default function HijosQRScreen({ navigation, route }) {
 
@@ -16,6 +17,33 @@ export default function HijosQRScreen({ navigation, route }) {
   const [modalVisible, setModalVisible] = useState(false);
   const [nombreHijo, setNombreHijo] = useState('');
   const [guardando, setGuardando] = useState(false);
+
+  // Estados para ver el QR más grande
+  const [modalQRVisible, setModalQRVisible] = useState(false);
+  const [hijoParaQR, setHijoParaQR] = useState(null);
+
+  const descargarOCompartirQR = async (hijo) => {
+    try {
+      if (!hijo.qr_code) {
+        Alert.alert('Error', 'Código QR no disponible.');
+        return;
+      }
+      const base64Data = hijo.qr_code.replace(/^data:image\/png;base64,/, '');
+      const filename = `${FileSystem.documentDirectory}qr_${hijo.nombre.replace(/\s+/g, '_')}.png`;
+
+      await FileSystem.writeAsStringAsync(filename, base64Data, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      await Share.share({
+        url: filename,
+        message: `Aquí tienes el código QR de BusWay para ${hijo.nombre}`,
+      });
+    } catch (err) {
+      console.error('Error sharing QR code:', err);
+      Alert.alert('Error', 'No se pudo compartir o descargar el código QR.');
+    }
+  };
 
   //CARGAR HIJOS DEL PADRE
   const cargarHijos = async () => {
@@ -147,19 +175,26 @@ export default function HijosQRScreen({ navigation, route }) {
 
                 <Text style={styles.qrCodigo}>ID: {hijo._id}</Text>
 
-                <View style={styles.accionesRow}>
-                  <TouchableOpacity style={styles.btnDescargar} activeOpacity={0.85}>
-                    <Ionicons name="download-outline" size={16} color="#0D1B3E" />
-                    <Text style={styles.btnDescargarText}>Descargar QR</Text>
+                 <View style={styles.accionesRow}>
+                  <TouchableOpacity 
+                    style={[styles.btnDescargar, { flex: 1 }]} 
+                    activeOpacity={0.85}
+                    onPress={() => {
+                      setHijoParaQR(hijo);
+                      setModalQRVisible(true);
+                    }}
+                  >
+                    <Ionicons name="download-outline" size={15} color="#0D1B3E" />
+                    <Text style={styles.btnDescargarText} numberOfLines={1}>QR</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={styles.btnEliminar}
+                    style={[styles.btnEliminar, { flex: 1 }]}
                     activeOpacity={0.85}
                     onPress={() => eliminarHijo(hijo)}
                   >
-                    <Ionicons name="trash-outline" size={16} color="#E53935" />
-                    <Text style={styles.btnEliminarText}>Eliminar</Text>
+                    <Ionicons name="trash-outline" size={15} color="#E53935" />
+                    <Text style={styles.btnEliminarText} numberOfLines={1}>Eliminar</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -229,6 +264,91 @@ export default function HijosQRScreen({ navigation, route }) {
           </KeyboardAvoidingView>
         </View>
       </Modal>
+
+      {/* Modal para ver y compartir el QR más grande */}
+      <Modal
+        visible={modalQRVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setModalQRVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { alignItems: 'center', padding: 28, borderRadius: 28 }]}>
+            <View style={{ width: 44, height: 5, borderRadius: 2.5, backgroundColor: '#E3ECF7', marginBottom: 20 }} />
+            
+            <Text style={[styles.modalTitle, { textAlign: 'center', marginBottom: 6 }]}>Código QR</Text>
+            <Text style={[styles.modalDesc, { textAlign: 'center', marginBottom: 20, fontWeight: '600', color: '#0D1B3E', fontSize: 16 }]}>
+              {hijoParaQR ? hijoParaQR.nombre : ''}
+            </Text>
+
+            {hijoParaQR && hijoParaQR.qr_code ? (
+              <View style={{
+                backgroundColor: '#FFF',
+                padding: 18,
+                borderRadius: 24,
+                borderWidth: 1.5,
+                borderColor: '#E3ECF7',
+                marginBottom: 24,
+                shadowColor: '#0D1B3E',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.08,
+                shadowRadius: 12,
+                elevation: 4
+              }}>
+                <Image
+                  source={{ uri: hijoParaQR.qr_code }}
+                  style={{ width: 220, height: 220 }}
+                  resizeMode="contain"
+                />
+              </View>
+            ) : null}
+
+            <TouchableOpacity
+              style={[styles.btnConfirmar, {
+                width: '100%',
+                marginBottom: 12,
+                backgroundColor: '#0D1B3E',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                shadowColor: '#0D1B3E',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.15,
+                shadowRadius: 8,
+                elevation: 3
+              }]}
+              onPress={() => {
+                if (hijoParaQR) {
+                  descargarOCompartirQR(hijoParaQR);
+                }
+              }}
+            >
+              <Ionicons name="share-social-outline" size={18} color="#FFF" style={{ marginRight: 8 }} />
+              <Text style={[styles.btnConfirmarText, { color: '#FFF' }]}>Compartir / Descargar</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.btnCancelar, {
+                width: '100%',
+                paddingVertical: 14,
+                borderWidth: 1.5,
+                borderColor: '#E3ECF7',
+                borderRadius: 14,
+                marginTop: 4,
+                alignItems: 'center',
+                justifyContent: 'center'
+              }]}
+              onPress={() => {
+                setModalQRVisible(false);
+                setHijoParaQR(null);
+              }}
+            >
+              <Text style={[styles.btnCancelarText, { color: '#0D1B3E', fontWeight: '600' }]}>Cerrar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -475,5 +595,46 @@ const styles = StyleSheet.create({
   btnCancelarText: {
     color: '#888',
     fontSize: 14,
+  },
+  ubicacionInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EBF3FE',
+    borderRadius: 10,
+    padding: 8,
+    width: '100%',
+    marginBottom: 12,
+    gap: 6
+  },
+  ubicacionText: {
+    fontSize: 12,
+    color: '#0D1B3E',
+    flex: 1
+  },
+  btnUbicacion: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    borderWidth: 1.5,
+    borderColor: '#168FE3',
+    backgroundColor: '#E3F2FD',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+  },
+  btnUbicacionText: {
+    color: '#168FE3',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  mapContainer: {
+    width: '100%',
+    height: 220,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#eee',
+    overflow: 'hidden',
+    marginTop: 8
   },
 });

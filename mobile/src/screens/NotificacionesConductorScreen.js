@@ -162,11 +162,7 @@ export default function NotificacionesConductorScreen({ navigation, route }) {
     cargarRutas();
   }, [cargarHistorial, cargarRecibidas, cargarRutas]);
 
-  useEffect(() => {
-    if (tab === 'recibidos' && sinLeerRecibidas > 0) {
-      marcarTodasRecibidasLeidas();
-    }
-  }, [tab, sinLeerRecibidas]);
+
 
   const cargarAsistentes = useCallback(async (tipoParam, selectedRutaId = null) => {
     setCargandoAsistentes(true);

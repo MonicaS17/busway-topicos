@@ -37,6 +37,7 @@ function ViajeActivoPadre({
   hijos,
   hijoSeleccionado,
   idsHijosRuta,
+  estudiantes, // Lista de todos los estudiantes de la ruta para mostrar los pines
   pulso,
   bottomInset
 }) {
@@ -180,23 +181,50 @@ function ViajeActivoPadre({
           <Text style={styles.sectionLabel}>Ubicación del bus</Text>
           <View style={styles.mapaContainer}>
             <MapView ref={mapRef} style={styles.mapaSimulado} provider={PROVIDER_DEFAULT} initialRegion={coordenadasBus}>
+              {/* Autobús */}
               <Marker coordinate={coordenadasBus} title="Autobús Escolar" zIndex={99}>
                 <View style={styles.customMarkerBus}><Text style={styles.markerEmoji}>🚌</Text></View>
               </Marker>
-              <Marker coordinate={coordenadasHijo} title="Tu Hogar" zIndex={5}>
-                <View style={[styles.customMarkerHito, { backgroundColor: '#3B82F6' }]}><Text style={styles.markerEmojiSmall}>🏠</Text></View>
-              </Marker>
+
+              {/* Escuela */}
               <Marker coordinate={{ latitude: 8.9975, longitude: -79.5240 }} title={rutaInfo?.escuela || 'Colegio San Agustín'} zIndex={5}>
                 <View style={[styles.customMarkerHito, { backgroundColor: '#10B981' }]}><Text style={styles.markerEmojiSmall}>🏫</Text></View>
               </Marker>
+
+              {/* Paradas Anónimas (Privacidad) */}
+              {(estudiantes || []).filter(e => e.lat && e.lng).map((est, idx) => {
+                const esMiHijo = hijos.some(h => String(h.id) === String(est.id || est._id));
+                const markerTitle = esMiHijo ? est.nombre : `Parada ${est.orden || idx + 1}`;
+                const markerDesc = esMiHijo ? (est.direccion || 'Tu punto de recogida') : 'Parada de recogida';
+                const markerBg = esMiHijo ? '#3B82F6' : '#94A3B8';
+
+                return (
+                  <Marker 
+                    key={est.id || est._id} 
+                    coordinate={{ latitude: Number(est.lat), longitude: Number(est.lng) }} 
+                    title={markerTitle}
+                    description={markerDesc}
+                    zIndex={esMiHijo ? 20 : 10}
+                  >
+                    <View style={[styles.customMarkerHito, { backgroundColor: markerBg, width: 28, height: 28, borderRadius: 14 }]}>
+                      {esMiHijo ? (
+                        <Text style={styles.markerEmojiSmall}>🏠</Text>
+                      ) : (
+                        <Text style={{ color: '#fff', fontSize: 11, fontWeight: 'bold' }}>{est.orden || idx + 1}</Text>
+                      )}
+                    </View>
+                  </Marker>
+                );
+              })}
             </MapView>
             <View style={styles.mapaFooter}>
               <Ionicons name="information-circle-outline" size={14} color="#888" />
-              <Text style={styles.mapaFooterText}>Conexión segura y en vivo</Text>
+              <Text style={styles.mapaFooterText}>Conexión segura y en vivo (paradas anónimas)</Text>
             </View>
           </View>
         </>
       )}
+
 
       <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Conductor</Text>
       <View style={styles.infoCard}>
@@ -271,6 +299,8 @@ function ViajeActivoConductor({
   handleQRScanned,
   handleParentQRScanned,
   finalizarRuta,
+  posicionBus,
+  rutaInfo,
   pulso,
   bottomInset
 }) {
@@ -284,6 +314,20 @@ function ViajeActivoConductor({
     ? estudiantes.find(e => e.estado === 'pendiente')
     : estudiantes.find(e => e.estado === 'abordo');
 
+  const regionMapa = posicionBus
+    ? {
+        latitude: Number(posicionBus.latitude),
+        longitude: Number(posicionBus.longitude),
+        latitudeDelta: 0.015,
+        longitudeDelta: 0.015
+      }
+    : {
+        latitude: 8.9833,
+        longitude: -79.5167,
+        latitudeDelta: 0.015,
+        longitudeDelta: 0.015
+      };
+
   return (
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={[styles.body, { paddingBottom: bottomInset + 24 }]} showsVerticalScrollIndicator={false}>
@@ -295,6 +339,71 @@ function ViajeActivoConductor({
           </View>
           <Ionicons name="radio-outline" size={20} color="#fff" />
         </Animated.View>
+
+        {/* Mapa del conductor con las paradas numeradas */}
+        <Text style={styles.sectionLabel}>Mapa de paradas</Text>
+        <View style={[styles.mapaContainer, { height: 240, marginBottom: 16 }]}>
+          <MapView 
+            style={styles.mapaSimulado} 
+            provider={PROVIDER_DEFAULT} 
+            initialRegion={regionMapa}
+          >
+            {/* Autobús */}
+            {posicionBus && (
+              <Marker coordinate={posicionBus} title="Mi Ubicación" zIndex={100}>
+                <View style={styles.customMarkerBus}><Text style={styles.markerEmoji}>🚌</Text></View>
+              </Marker>
+            )}
+
+            {/* Paradas de los estudiantes */}
+            {(estudiantes || []).filter(e => e.lat && e.lng).map((est, idx) => (
+              <Marker 
+                key={est.id || est._id} 
+                coordinate={{ latitude: Number(est.lat), longitude: Number(est.lng) }} 
+                title={`Parada ${est.orden || idx + 1}: ${est.nombre}`}
+                description={est.direccion || 'Punto de recogida'}
+                zIndex={10}
+              >
+                <View style={[styles.customMarkerHito, { backgroundColor: '#3B82F6', width: 28, height: 28, borderRadius: 14 }]}>
+                  <Text style={{ color: '#fff', fontSize: 11, fontWeight: 'bold' }}>{est.orden || idx + 1}</Text>
+                </View>
+              </Marker>
+            ))}
+
+            {/* Destino final: Escuela */}
+            <Marker coordinate={{ latitude: 8.9975, longitude: -79.5240 }} title={rutaInfo?.escuela || 'Colegio San Agustín'} zIndex={5}>
+              <View style={[styles.customMarkerHito, { backgroundColor: '#10B981' }]}><Text style={styles.markerEmojiSmall}>🏫</Text></View>
+            </Marker>
+          </MapView>
+        </View>
+
+        {/* Listado de secuencia de paradas */}
+        <Text style={styles.sectionLabel}>Secuencia de paradas</Text>
+        <View style={[styles.infoCard, { marginBottom: 16, paddingVertical: 4 }]}>
+          {(estudiantes || []).map((est, idx) => (
+            <View key={est.id || est._id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: idx < estudiantes.length - 1 ? 1 : 0, borderBottomColor: '#E3ECF7' }}>
+              <View style={[styles.customMarkerHito, { backgroundColor: est.estado === 'abordo' ? '#16A34A' : (est.estado === 'ausente' ? '#DC2626' : '#3B82F6'), width: 22, height: 22, borderRadius: 11, marginRight: 10 }]}>
+                <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>{est.orden || idx + 1}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#0D1B3E' }}>{est.nombre}</Text>
+                <Text style={{ fontSize: 11, color: '#666' }} numberOfLines={1}>{est.direccion || 'Sin referencia registrada'}</Text>
+              </View>
+              <View style={{ backgroundColor: est.estado === 'abordo' ? '#E6F9EE' : (est.estado === 'ausente' ? '#FEE2E2' : '#FFF8E1'), paddingVertical: 4, paddingHorizontal: 8, borderRadius: 12 }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: est.estado === 'abordo' ? '#16A34A' : (est.estado === 'ausente' ? '#DC2626' : '#F59E0B') }}>
+                  {est.estado === 'abordo' ? 'A Bordo' : (est.estado === 'ausente' ? 'Ausente' : 'Pendiente')}
+                </Text>
+              </View>
+            </View>
+          ))}
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, borderTopWidth: 1, borderTopColor: '#E3ECF7' }}>
+            <View style={[styles.customMarkerHito, { backgroundColor: '#10B981', width: 22, height: 22, borderRadius: 11, marginRight: 10 }]}><Text style={{ fontSize: 11 }}>🏫</Text></View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#0D1B3E' }}>{rutaInfo?.escuela || 'Escuela (Destino Final)'}</Text>
+              <Text style={{ fontSize: 11, color: '#666' }}>Llegada de la ruta escolar</Text>
+            </View>
+          </View>
+        </View>
 
         {estudianteActual && <IndicadorParada tipoViaje={tipoViaje} student={estudianteActual} />}
 
