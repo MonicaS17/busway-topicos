@@ -32,8 +32,21 @@ const verifyToken = async (req, res, next) => {
     } else if (hasFirebase) {
       decodedToken = await admin.auth().verifyIdToken(token);
     } else {
-      // Si no hay Firebase y no es un mock prefijado, lo tratamos como mock uid directo
-      decodedToken = { uid: token };
+      // Si no hay Firebase y es un token JWT real, decodificar el payload manualmente
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        try {
+          const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'));
+          decodedToken = {
+            uid: payload.user_id || payload.uid || payload.sub,
+            email: payload.email
+          };
+        } catch (e) {
+          decodedToken = { uid: token };
+        }
+      } else {
+        decodedToken = { uid: token };
+      }
     }
 
     // Enriquecer req.user con datos de la BD de MongoDB
