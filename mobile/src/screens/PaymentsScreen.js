@@ -688,7 +688,8 @@ function VistaConductor({ navigation, usuario, onRefreshUsuario }) {
     return (
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
       >
         <ScrollView
           contentContainerStyle={styles.body}
@@ -817,7 +818,7 @@ function VistaConductor({ navigation, usuario, onRefreshUsuario }) {
                     {
                       text: 'Ver en Marketplace',
                       onPress: () => {
-                        navigation.navigate('Marketplace');
+                        navigation.navigate('Marketplace', { usuario: perfilUsuario || usuario });
                       }
                     }
                   ]

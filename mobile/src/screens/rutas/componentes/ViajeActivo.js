@@ -95,8 +95,8 @@ function ViajeActivoPadre({
     // Ida - Mañana
     esperando_ida_inactivo: {
       icono: 'time-outline',
-      titulo: 'Esperando recogida',
-      mensaje: 'El conductor aún no ha iniciado la ruta.',
+      titulo: 'Viaje no iniciado',
+      mensaje: 'Esperando recogida: el conductor aún no ha iniciado la ruta.',
       colorFondo: '#F5F8FC',
       colorTexto: '#0D1B3E',
       colorIcono: '#888',
@@ -133,8 +133,8 @@ function ViajeActivoPadre({
     // Vuelta - Tarde
     esperando_vuelta_inactivo: {
       icono: 'time-outline',
-      titulo: 'Esperando regreso',
-      mensaje: 'El viaje de regreso a casa no ha iniciado.',
+      titulo: 'Viaje no iniciado',
+      mensaje: 'Esperando regreso: el viaje de regreso a casa no ha iniciado.',
       colorFondo: '#F5F8FC',
       colorTexto: '#0D1B3E',
       colorIcono: '#888',
@@ -318,16 +318,32 @@ function ViajeActivoPadre({
         </View>
         <View style={styles.divider} />
         <FilaInfoViaje icon="school-outline" label="Escuela" valor={getSafeText(rutaInfo?.escuela, 'Colegio San Agustín')} />
-        <FilaInfoViaje 
-          icon="time-outline" 
-          label={tipoViaje === 'vuelta' ? 'Salida Colegio' : 'Horario'} 
-          valor={
-            tipoViaje === 'vuelta' 
-              ? (rutaInfo?.hora_salida_vuelta || '2:30 PM (Aprox.)') 
-              : (rutaInfo?.horario || '6:30 AM — 7:15 AM')
-          } 
-          last 
-        />
+        {rutaActiva ? (
+          <FilaInfoViaje 
+            icon="time-outline" 
+            label={tipoViaje === 'vuelta' ? 'Salida Colegio' : 'Horario'} 
+            valor={
+              tipoViaje === 'vuelta' 
+                ? (rutaInfo?.hora_salida_vuelta || '2:30 PM (Aprox.)') 
+                : (rutaInfo?.horario || '6:30 AM — 7:15 AM')
+            } 
+            last 
+          />
+        ) : (
+          <>
+            <FilaInfoViaje 
+              icon="time-outline" 
+              label="Horario Entrada" 
+              valor={rutaInfo?.horario || '6:30 AM — 7:15 AM'} 
+            />
+            <FilaInfoViaje 
+              icon="time-outline" 
+              label="Salida Colegio" 
+              valor={rutaInfo?.hora_salida_vuelta || '2:30 PM (Aprox.)'} 
+              last 
+            />
+          </>
+        )}
       </View>
 
       <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Estado de tus hijos</Text>
