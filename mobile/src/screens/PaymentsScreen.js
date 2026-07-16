@@ -63,7 +63,7 @@ export default function PaymentsScreen({ navigation, route }) {
 
       <View style={styles.card}>
         {esConductor 
-          ? <VistaConductor usuario={perfilUsuario} onRefreshUsuario={cargarPerfil} /> 
+          ? <VistaConductor navigation={navigation} usuario={perfilUsuario} onRefreshUsuario={cargarPerfil} /> 
           : <VistaPadre usuario={perfilUsuario} />}
       </View>
     </SafeAreaView>
@@ -564,7 +564,7 @@ function FilaRecibo({ label, valor, destacado }) {
 }
 
 // ─── VISTA CONDUCTOR ──────────────────────────────────────────────────────────
-function VistaConductor({ usuario, onRefreshUsuario }) {
+function VistaConductor({ navigation, usuario, onRefreshUsuario }) {
   const [pagos, setPagos] = useState([]);
   const [acuerdos, setAcuerdos] = useState([]);
   const [contratosActivos, setContratosActivos] = useState(0);
@@ -751,12 +751,36 @@ function VistaConductor({ usuario, onRefreshUsuario }) {
           <Text style={[styles.inputLabel, { marginTop: 14 }]}>Número de Cuenta o Tarjeta</Text>
           <TextInput
             style={styles.formInput}
-            placeholder="Ej: 04729831948"
+            placeholder="Ej: 4242 4242 4242 4242 o 04729831948"
             placeholderTextColor="#aaa"
             value={bancoCuenta}
-            onChangeText={setBancoCuenta}
+            onChangeText={(text) => {
+              const clean = text.replace(/\D/g, '');
+              let formatted = clean;
+              if (clean.length === 15 || clean.length === 16) {
+                formatted = clean.match(/.{1,4}/g)?.join(' ') || clean;
+              }
+              setBancoCuenta(formatted);
+            }}
             keyboardType="numeric"
           />
+
+          {bancoCuenta.trim().length > 0 && (() => {
+            const cleanDigits = bancoCuenta.replace(/\D/g, '');
+            const esTarjeta = cleanDigits.length === 15 || cleanDigits.length === 16;
+            return (
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 4, paddingLeft: 4 }}>
+                <Ionicons 
+                  name={esTarjeta ? "card-outline" : "business-outline"} 
+                  size={14} 
+                  color={esTarjeta ? "#16A34A" : "#0A84FF"} 
+                />
+                <Text style={{ fontSize: 12, color: esTarjeta ? "#16A34A" : "#0A84FF", fontWeight: '600' }}>
+                  {esTarjeta ? "Detectado: Tarjeta de Crédito/Débito" : "Detectado: Cuenta Bancaria"}
+                </Text>
+              </View>
+            );
+          })()}
 
           <Text style={[styles.inputLabel, { marginTop: 14 }]}>Nombre del Titular</Text>
           <TextInput
@@ -774,11 +798,13 @@ function VistaConductor({ usuario, onRefreshUsuario }) {
               setGuardandoBanco(true);
               try {
                 const token = await obtenerToken();
+                const cleanCuenta = bancoCuenta.replace(/\s/g, '');
                 await api.patch('/api/auth/perfil/actualizar', {
                   banco_info: {
                     banco_nombre: bancoNombre,
                     banco_tipo: bancoTipo,
-                    banco_cuenta: bancoCuenta,
+                    banco_cuenta: cleanCuenta,
+                    num_cuenta: cleanCuenta,
                     banco_titular: bancoTitular
                   }
                 }, {

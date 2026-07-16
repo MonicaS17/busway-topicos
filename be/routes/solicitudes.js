@@ -160,7 +160,8 @@ router.patch('/:id/aceptar', verifyToken, async (req, res) => {
     // Validar información de cobro (banco/tarjeta) del conductor
     const tieneCobroConfigurado = conductor.datos_conductor?.banco_info &&
                                   conductor.datos_conductor.banco_info.banco_nombre &&
-                                  conductor.datos_conductor.banco_info.num_cuenta;
+                                  (conductor.datos_conductor.banco_info.num_cuenta || 
+                                   conductor.datos_conductor.banco_info.banco_cuenta);
     if (!tieneCobroConfigurado) {
       return res.status(400).json({
         error: 'No puedes aceptar solicitudes sin configurar primero tu información de cobro (banco o tarjeta) en la sección de Pagos.'
