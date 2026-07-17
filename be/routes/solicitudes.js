@@ -40,33 +40,24 @@ router.post('/', verifyToken, async (req, res) => {
       return res.status(404).json({ error: 'Conductor no encontrado' });
     }
 
-    // Validar si el padre ya tiene una solicitud activa (pendiente/aceptada) con este conductor
-    const solicitudExistente = await Solicitud.findOne({
-      padre_id: padre._id,
-      conductor_id,
+    // Validar si alguno de los estudiantes ya tiene una solicitud activa (pendiente/aceptada)
+    const solicitudDuplicada = await Solicitud.findOne({
+      hijos_ids: { $in: hijos_ids },
       estado: { $in: ['pendiente', 'aceptada'] }
     });
-    if (solicitudExistente) {
-      return res.status(400).json({ error: 'Ya tienes una solicitud pendiente o aceptada con este conductor.' });
+    if (solicitudDuplicada) {
+      const estudiante = await Estudiante.findOne({ _id: { $in: hijos_ids } });
+      const nombreEst = estudiante ? estudiante.nombre : 'el estudiante';
+      return res.status(400).json({ error: `Ya existe una solicitud pendiente o aprobada para ${nombreEst}.` });
     }
 
-    // Validar si el padre ya tiene un contrato activo con este conductor
-    const acuerdoExistente = await Acuerdo.findOne({
-      padre_id: padre._id,
-      conductor_id,
-      estado: 'activo'
-    });
-    if (acuerdoExistente) {
-      return res.status(400).json({ error: 'Ya tienes un contrato activo con este conductor.' });
-    }
-
-    // Validar si el padre ya tiene algún hijo asignado a este conductor
+    // Validar si alguno de los estudiantes ya está asignado a un conductor/ruta activo
     const estudianteAsignado = await Estudiante.findOne({
-      padre_id: padre._id,
-      conductor_id
+      _id: { $in: hijos_ids },
+      conductor_id: { $ne: null }
     });
     if (estudianteAsignado) {
-      return res.status(400).json({ error: 'Ya tienes a uno o más de tus hijos asignados a este conductor.' });
+      return res.status(400).json({ error: `${estudianteAsignado.nombre} ya tiene una ruta asignada actualmente.` });
     }
 
     const hijos = await Estudiante.find({ _id: { $in: hijos_ids }, padre_id: padre._id });

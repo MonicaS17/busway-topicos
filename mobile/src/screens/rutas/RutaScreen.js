@@ -298,9 +298,7 @@ function RutaPadre({ navigation, usuario, route }) {
 
   const progreso = (ruta.mesActual / ruta.totalMeses) * 100;
   const mostrarSelectorHijos = hijos.length > 1 && uniqueRutas.length > 1;
-  const hijosEnEstaRuta = uniqueRutas.length > 1
-    ? ruta.hijos.filter(h => h.ruta_id === ruta.rutaIdActiva)
-    : ruta.hijos;
+  const hijosEnEstaRuta = ruta.hijos.filter(h => h.ruta_id === ruta.rutaIdActiva);
   const gruposPorRuta = uniqueRutas.map(rutaId => {
     const hijosDeRuta = hijos.filter(h => (h.ruta_id?._id?.toString() || h.ruta_id?.toString()) === rutaId);
     return { rutaId, representante: hijosDeRuta[0], extra: hijosDeRuta.length - 1 };
