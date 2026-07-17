@@ -15,21 +15,21 @@ const navLinks = [
 
 function LogoMark() {
   return (
-    <div className="mb-3 flex items-center gap-4">
-      <div className="relative h-12 w-12 overflow-hidden rounded-full">
+    <span className="mb-3 flex items-center gap-4">
+      <span className="relative h-12 w-12 overflow-hidden rounded-full block">
         <Image src="/logo.jpg" alt="BusWay" fill sizes="48px" className="w-full h-full object-cover" />
-      </div>
+      </span>
 
-      <div className="flex flex-col justify-center">
-        <p className="text-xl font-extrabold text-navy">
+      <span className="flex flex-col justify-center">
+        <span className="text-xl font-extrabold text-navy block">
           Bus<span className="text-busway-blue">Way</span>
-        </p>
+        </span>
 
-        <p className="text-xs font-bold text-navy">
+        <span className="text-xs font-bold text-navy block">
           tus hijos <span className="text-busway-blue">seguros</span> en cada ruta
-        </p>
-      </div>
-    </div>
+        </span>
+      </span>
+    </span>
   );
 }
 
