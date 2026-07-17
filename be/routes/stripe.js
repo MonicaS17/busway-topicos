@@ -10,10 +10,20 @@ router.post('/create-setup-intent', verifyToken, async (req, res) => {
     const usuario = await Usuario.findOne({ firebase_uid: req.user.uid });
     if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' });
 
-    const acuerdo = await Acuerdo.findOne({
-      padre_id: usuario._id,
-      estado: 'activo',
-    });
+    const { acuerdoId } = req.body;
+    let acuerdo;
+    if (acuerdoId) {
+      acuerdo = await Acuerdo.findOne({
+        _id: acuerdoId,
+        padre_id: usuario._id,
+        estado: 'activo'
+      });
+    } else {
+      acuerdo = await Acuerdo.findOne({
+        padre_id: usuario._id,
+        estado: 'activo',
+      });
+    }
     if (!acuerdo) {
       return res.status(400).json({
         error: 'No tienes un contrato activo. Debes tener un acuerdo aceptado primero.',
@@ -163,10 +173,20 @@ router.post('/create-checkout-session', verifyToken, async (req, res) => {
     const usuario = await Usuario.findOne({ firebase_uid: req.user.uid });
     if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' });
 
-    const acuerdo = await Acuerdo.findOne({
-      padre_id: usuario._id,
-      estado: 'activo',
-    });
+    const { acuerdoId } = req.body;
+    let acuerdo;
+    if (acuerdoId) {
+      acuerdo = await Acuerdo.findOne({
+        _id: acuerdoId,
+        padre_id: usuario._id,
+        estado: 'activo'
+      });
+    } else {
+      acuerdo = await Acuerdo.findOne({
+        padre_id: usuario._id,
+        estado: 'activo',
+      });
+    }
     if (!acuerdo) {
       return res.status(400).json({
         error: 'No tienes un contrato activo. Debes tener un acuerdo aceptado primero.',
