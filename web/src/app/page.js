@@ -13,9 +13,9 @@ const features = [
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-busway-light">
+    <main className="flex flex-col min-h-screen bg-busway-light">
       <Navbar />
-      <section className="bg-white px-5 py-12 md:py-16">
+      <section className="flex-grow bg-white px-5 py-12 md:py-16">
         <div className="mx-auto grid max-w-6xl items-center gap-10 md:grid-cols-[1fr_0.85fr]">
           <div>
             <div className="mb-6 flex items-center gap-4">
