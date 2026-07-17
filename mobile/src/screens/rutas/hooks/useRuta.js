@@ -132,8 +132,17 @@ export default function useRuta({ usuario, esPadre, selectedHijoId, selectedRuta
             const resAcuerdo = await api.get('/api/acuerdos/mis-acuerdos', {
               headers: { Authorization: `Bearer ${idToken}` }
             });
-            const ac = resAcuerdo.data?.acuerdo;
-            if (ac && ac.estado === 'activo' && ac.stripe_subscription_id) {
+            const allAcuerdos = resAcuerdo.data?.acuerdos || [];
+            
+            // Buscar si hay algún acuerdo activo y pagado que cubra al hijo seleccionado
+            const hasPaidAgreementForHijo = allAcuerdos.some(ac => {
+              if (ac.estado !== 'activo' || !ac.stripe_subscription_id) return false;
+              
+              const hijosIds = ac.solicitud_id?.hijos_ids || [];
+              return hijosIds.some(h => String(h._id || h) === String(activeHijo?._id || activeHijo?.id));
+            });
+
+            if (hasPaidAgreementForHijo) {
               paid = true;
             }
           } catch (err) {
