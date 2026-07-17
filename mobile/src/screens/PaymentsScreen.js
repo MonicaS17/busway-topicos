@@ -50,7 +50,7 @@ export default function PaymentsScreen({ navigation, route }) {
 
       <View style={styles.header}>
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <TouchableOpacity onPress={() => navigation.navigate('Dashboard', { usuario: perfilUsuario || usuario })} style={styles.backBtn}>
             <Ionicons name="arrow-back-outline" size={22} color="#fff" />
           </TouchableOpacity>
           <View style={styles.headerTitleContainer}>
@@ -817,9 +817,7 @@ function VistaConductor({ navigation, usuario, onRefreshUsuario }) {
                   [
                     {
                       text: 'Entendido',
-                      onPress: () => {
-                        navigation.navigate('Dashboard', { usuario: perfilUsuario || usuario });
-                      }
+                      onPress: () => {}
                     }
                   ]
                 );
