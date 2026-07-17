@@ -33,8 +33,9 @@ export default function ViajeFinalizado({
       </View>
       <Text style={styles.finTitle}>¡Ruta completada!</Text>
       <Text style={styles.finDesc}>
-        {entregados} de {total} estudiantes fueron entregados exitosamente.
-        Los padres han sido notificados.
+        {ausente === total && total > 0
+          ? 'La ruta ha sido finalizada porque todos los estudiantes fueron marcados como ausentes.'
+          : 'Jornada completada con éxito. Los padres han sido notificados sobre el estado de sus hijos.'}
       </Text>
 
       <View style={styles.resumenFinal}>
