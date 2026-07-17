@@ -984,7 +984,7 @@ function RutaConductor({ navigation, usuario }) {
         }
       }
     } catch (err) {
-      console.error('Error al guardar ruta:', err);
+      console.log('Error al guardar ruta:', err.response?.data?.error || err.message);
       setErrorGuardar(err.response?.data?.error || 'Error al guardar la ruta. Inténtalo de nuevo.');
     } finally {
       setGuardando(false);

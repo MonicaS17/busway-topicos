@@ -327,13 +327,31 @@ router.post('/ruta', verifyToken, async (req, res) => {
       else freqArray = [freqArray];
     }
 
-    // Verificar si ya existe una ruta del mismo conductor con el mismo horario de salida
-    const rutaExistente = await Ruta.findOne({
+    // Verificar si ya existe una ruta del mismo conductor con colisiones de horario (salida, llegada o vuelta)
+    const queryColision = {
       conductor_id: usuario._id,
-      horario_salida: horario_salida
-    });
+      $or: [
+        { horario_salida: horario_salida },
+        { horario_llegada: horario_llegada }
+      ]
+    };
+    if (hora_salida_vuelta) {
+      queryColision.$or.push({ hora_salida_vuelta: hora_salida_vuelta });
+    }
+
+    const rutaExistente = await Ruta.findOne(queryColision);
     if (rutaExistente) {
-      return res.status(400).json({ error: `Ya tienes otra ruta programada a las ${horario_salida}.` });
+      let detalleError = '';
+      if (rutaExistente.horario_salida === horario_salida) {
+        detalleError = `Ya tienes otra ruta con la misma hora de salida (${horario_salida}).`;
+      } else if (rutaExistente.horario_llegada === horario_llegada) {
+        detalleError = `Ya tienes otra ruta con la misma hora de llegada (${horario_llegada}).`;
+      } else if (hora_salida_vuelta && rutaExistente.hora_salida_vuelta === hora_salida_vuelta) {
+        detalleError = `Ya tienes otra ruta con la misma hora de salida de vuelta (${hora_salida_vuelta}).`;
+      } else {
+        detalleError = 'Ya tienes otra ruta con horarios que coinciden.';
+      }
+      return res.status(400).json({ error: detalleError });
     }
 
     const nuevaRuta = new Ruta({
@@ -380,6 +398,37 @@ router.patch('/ruta/:rutaId', verifyToken, async (req, res) => {
     }
 
     const { escuela_id, nombre_ruta, escuela, zona, horario_salida, horario_llegada, frecuencia, estado, escuela_lat, escuela_lng, hora_salida_vuelta } = req.body;
+
+    const checkSalida = horario_salida !== undefined ? horario_salida : ruta.horario_salida;
+    const checkLlegada = horario_llegada !== undefined ? horario_llegada : ruta.horario_llegada;
+    const checkVuelta = hora_salida_vuelta !== undefined ? hora_salida_vuelta : ruta.hora_salida_vuelta;
+
+    const queryColision = {
+      conductor_id: usuario._id,
+      _id: { $ne: req.params.rutaId },
+      $or: [
+        { horario_salida: checkSalida },
+        { horario_llegada: checkLlegada }
+      ]
+    };
+    if (checkVuelta) {
+      queryColision.$or.push({ hora_salida_vuelta: checkVuelta });
+    }
+
+    const rutaExistente = await Ruta.findOne(queryColision);
+    if (rutaExistente) {
+      let detalleError = '';
+      if (rutaExistente.horario_salida === checkSalida) {
+        detalleError = `Ya tienes otra ruta con la misma hora de salida (${checkSalida}).`;
+      } else if (rutaExistente.horario_llegada === checkLlegada) {
+        detalleError = `Ya tienes otra ruta con la misma hora de llegada (${checkLlegada}).`;
+      } else if (checkVuelta && rutaExistente.hora_salida_vuelta === checkVuelta) {
+        detalleError = `Ya tienes otra ruta con la misma hora de salida de vuelta (${checkVuelta}).`;
+      } else {
+        detalleError = 'Ya tienes otra ruta con horarios que coinciden.';
+      }
+      return res.status(400).json({ error: detalleError });
+    }
 
     if (escuela_id !== undefined) {
       const Escuela = mongoose.model('escuelas');
@@ -456,17 +505,7 @@ router.patch('/ruta/:rutaId', verifyToken, async (req, res) => {
     if (nombre_ruta !== undefined) { ruta.nombre_ruta = nombre_ruta; ruta.nombre = nombre_ruta; }
     if (escuela !== undefined) ruta.escuela = escuela;
     if (zona !== undefined) ruta.zona = zona;
-    if (horario_salida !== undefined) {
-      const rutaExistente = await Ruta.findOne({
-        conductor_id: usuario._id,
-        horario_salida: horario_salida,
-        _id: { $ne: req.params.rutaId }
-      });
-      if (rutaExistente) {
-        return res.status(400).json({ error: `Ya tienes otra ruta programada a las ${horario_salida}.` });
-      }
-      ruta.horario_salida = horario_salida;
-    }
+    if (horario_salida !== undefined) ruta.horario_salida = horario_salida;
     if (horario_llegada !== undefined) ruta.horario_llegada = horario_llegada;
     if (frecuencia !== undefined) {
       let freqArray = frecuencia;
