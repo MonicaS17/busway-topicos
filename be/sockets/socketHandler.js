@@ -548,22 +548,42 @@ module.exports = (io) => {
 
         const nuevaAsistencia = {
           hijo_id,
-          tipo: tipoEfectivo,
+          tipo: estado === 'ausente' ? 'ausente' : tipoEfectivo,
           metodo_registro: 'manual',
           fecha_hora: ahora,
           latitud: lat || null,
           longitud: lng || null
         };
 
-        await Viaje.findByIdAndUpdate(
+        const viajeActualizado = await Viaje.findByIdAndUpdate(
           id_viaje,
           {
             $push: { asistencias: nuevaAsistencia },
             ...((estado === 'abordado' || estado === 'abordo') && { $addToSet: { estudiantes_abordo: hijo_id } }),
             ...(estado === 'ausente' && { $pull: { estudiantes_abordo: hijo_id } }),
             ...(estado === 'entregado' && { $pull: { estudiantes_abordo: hijo_id } })
-          }
+          },
+          { new: true }
         );
+
+        // Verificar si todos los estudiantes de la ruta están ausentes
+        const Estudiante = require('../models/Estudiante');
+        const estudiantesRuta = await Estudiante.find({ ruta_id: id_ruta, estado: 'Activo' });
+        const totalAusentes = viajeActualizado.asistencias.filter(a => a.tipo === 'ausente').length;
+
+        if (totalAusentes === estudiantesRuta.length && estudiantesRuta.length > 0) {
+          console.log(`ℹ️ Todos los estudiantes (${totalAusentes}/${estudiantesRuta.length}) están ausentes. Finalizando ruta automáticamente.`);
+          await Viaje.findByIdAndUpdate(id_viaje, {
+            estado: 'finalizado',
+            hora_llegada: ahora,
+            estudiantes_abordo: []
+          });
+          io.to(`sala:ruta:${id_ruta}`).emit('ruta:finalizada');
+          socket.emit('error:servidor', {
+            codigo: 'TODOS_AUSENTES',
+            mensaje: 'La ruta ha sido finalizada automáticamente porque todos los estudiantes fueron marcados como ausentes.'
+          });
+        }
 
         console.log(`📲 Registro manual [${estado}] para el estudiante ${hijo_id}`);
 
