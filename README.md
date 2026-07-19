@@ -12,7 +12,7 @@ BusWay consta de tres componentes principales:
 2. **Aplicación Móvil (`mobile/`):** Desarrollada en **React Native con Expo**. Incluye dos interfaces diferenciadas según el rol del usuario:
    * **Conductor:** Permite gestionar la lista de estudiantes, iniciar/finalizar recorridos, marcar asistencias manualmente o por escáner de códigos QR, y geolocalizar el bus en tiempo real.
    * **Padre:** Permite buscar y contratar conductores en el Marketplace, autorizar contratos de pago recurrentes en Stripe, registrar la ubicación de recogida y monitorear la ruta del bus en vivo con notificaciones push personalizadas.
-3. **Sitio Web (`web/`):** Panel administrativo del sistema.
+3. **Panel Administrativo Web (`web/`):** Aplicación de escritorio/sitio web construida con **React, Next.js y Tailwind CSS**. Permite a conductores, padres y administradores del sistema gestionar convenios, visualizar historiales de facturación, exportar reportes PDF/Excel, y monitorear estadísticas globales.
 
 ---
 
@@ -60,7 +60,7 @@ cd busway-topicos
 ```
 
 ### 2. Instalar Dependencias (Excluidas en Git)
-Dado que los paquetes pesados de Node.js no se suben al control de versiones, debes instalarlos de forma independiente en ambas carpetas:
+Dado que los paquetes pesados de Node.js no se suben al control de versiones, debes instalarlos de forma independiente en cada carpeta:
 
 * **Instalar backend:**
   ```bash
@@ -71,6 +71,11 @@ Dado que los paquetes pesados de Node.js no se suben al control de versiones, de
   ```bash
   cd ../mobile
   npm install --legacy-peer-deps
+  ```
+* **Instalar panel web:**
+  ```bash
+  cd ../web
+  npm install
   ```
 
 ---
@@ -96,6 +101,18 @@ Crea un archivo `.env` en la carpeta `mobile/` con la siguiente estructura:
 ```env
 EXPO_PUBLIC_API_URL=http://TU_IP_LOCAL:3000
 EXPO_PUBLIC_GOOGLE_VISION_KEY=AIzaSy... # Clave de API de Google Vision para el OCR de Cédulas
+```
+
+### Panel Web (`web/.env`)
+Crea un archivo `.env` en la carpeta `web/` con la siguiente estructura:
+```env
+NEXT_PUBLIC_API_URL=http://localhost:3000 # O la URL de producción de tu Backend
+NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSy...
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=busway-168c2.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=busway-168c2
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=busway-168c2.firebasestorage.app
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=997158856914
+NEXT_PUBLIC_FIREBASE_APP_ID=1:997158856914:web:331173cc15c93dbb52250b
 ```
 
 > [!TIP]
@@ -134,6 +151,17 @@ Con tu base de datos MongoDB local corriendo de fondo (puedes verificarla abrien
    npx expo start
    ```
 3. Escanea el código QR que se imprime en tu terminal utilizando la aplicación **Expo Go** en tu celular para ver y probar la interfaz en tiempo real.
+
+### Paso 3: Levantar el Panel Web (Next.js)
+1. Abre una nueva terminal en la carpeta `web/`:
+   ```bash
+   cd web
+   ```
+2. Inicia el servidor de desarrollo de Next.js:
+   ```bash
+   npm run dev
+   ```
+3. Abre en tu navegador [http://localhost:3000](http://localhost:3000) (o el puerto que te indique la consola, por ejemplo `http://localhost:3001` si el backend está usando el puerto 3000) para ver el panel de administración.
 
 ---
 
