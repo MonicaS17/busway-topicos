@@ -1,163 +1,144 @@
-# 🚌 BusWay — Transporte Escolar Digital
-> *tus hijos seguros en cada ruta*
+# 🚌 BusWay — Plataforma de Transporte Escolar Digital
 
-Plataforma digital de transporte escolar para Panamá. Permite a los padres monitorear en tiempo real la ruta del bus, verificar la asistencia de sus hijos mediante códigos QR y gestionar pagos automáticos.
-
----
-
-## Estructura del proyecto
-
-```
-busway/
-├── be/          → Backend (Node.js + Express + MongoDB)
-├── mobile/      → App móvil (React Native + Expo)
-└── web/         → Sitio web (React) — próximamente
-```
+> **Proyecto de Tópicos de Software**
+> Plataforma móvil y web de transporte escolar seguro, optimizada con rastreo satelital en tiempo real, verificación por asistencia QR, pagos automatizados mediante Stripe y OCR para validación de conductores.
 
 ---
 
-## Requisitos previos
+## 📋 Arquitectura y Funcionamiento
 
-Instalar esto antes de empezar:
+BusWay consta de tres componentes principales:
+1. **Backend (`be/`):** API REST construida con **Node.js, Express y MongoDB (Mongoose)**. Administra la lógica de negocio, autenticación de Firebase, procesamiento de pagos con Stripe y comunicación en tiempo real a través de **WebSockets (Socket.io)**.
+2. **Aplicación Móvil (`mobile/`):** Desarrollada en **React Native con Expo**. Incluye dos interfaces diferenciadas según el rol del usuario:
+   * **Conductor:** Permite gestionar la lista de estudiantes, iniciar/finalizar recorridos, marcar asistencias manualmente o por escáner de códigos QR, y geolocalizar el bus en tiempo real.
+   * **Padre:** Permite buscar y contratar conductores en el Marketplace, autorizar contratos de pago recurrentes en Stripe, registrar la ubicación de recogida y monitorear la ruta del bus en vivo con notificaciones push personalizadas.
+3. **Sitio Web (`web/`):** Panel administrativo del sistema.
 
-| Herramienta | Versión | Descarga |
+---
+
+## ⚡ Funcionalidades Clave (Esenciales para Entender)
+
+Para tu examen de **Tópicos de Software**, es fundamental comprender estos flujos lógicos clave implementados en el código:
+
+### 1. Seguimiento en Tiempo Real (WebSockets)
+* El canal de comunicación se gestiona en [socketHandler.js](file:///be/sockets/socketHandler.js).
+* Cuando el chofer inicia una ruta, el móvil emite `join:ruta` con las credenciales correspondientes.
+* El backend transmite la ubicación periódicamente del conductor a la sala de la ruta (`sala:ruta:ID_RUTA`), y la app del padre recibe y dibuja la posición del vehículo en un mapa interactivo.
+
+### 2. Auto-Cancelación de Viaje (Regla de Negocio)
+* Si todos los estudiantes de una ruta son marcados como **ausentes** (ya sea manualmente por el chofer o mediante la app del padre), la ruta **se finaliza automáticamente** en el backend para evitar consumos de API de mapas innecesarios.
+* El sistema notifica a la app del chofer (error `TODOS_AUSENTES`) y detiene la jornada marcando el viaje como `finalizado`.
+
+### 3. Pasarela de Pagos Stripe & Autocuración (Self-Healing)
+* Los pagos se manejan mediante suscripciones recurrentes mensuales en Stripe ([stripe.js](file:///be/routes/stripe.js)).
+* **Resiliencia de Clientes (Self-Healing):** Si las llaves de Stripe cambian o se limpia la base de datos de desarrollo y el `stripe_customer_id` de Mongoose queda desactualizado, el backend detecta el error en el try/catch (ej: *No such customer*), crea automáticamente un nuevo cliente en Stripe, lo vincula a la cuenta local en caliente, y continúa con el pago sin lanzar errores 500 al usuario.
+* **Control Multihijo Independiente:** Si un padre tiene varios hijos en colegiales diferentes con contratos independientes, el sistema verifica las suscripciones por estudiante. Si solo se pagó la mensualidad de un hijo, el padre solo podrá ver el mapa en vivo de ese estudiante en particular; la vista del hijo con mensualidad impaga permanecerá bloqueada bajo el aviso de cobro pendiente.
+
+---
+
+## 🛠️ Requisitos Previos y Herramientas
+
+Instalar antes de arrancar el desarrollo:
+
+| Herramienta | Versión Recomendada | Enlace de Descarga |
 |---|---|---|
-| Node.js | 18+ | https://nodejs.org |
-| MongoDB Community | 7.x | https://www.mongodb.com/try/download/community |
-| MongoDB Compass | Última | https://www.mongodb.com/products/tools/compass |
-| Expo Go (celular) | Última | Play Store / App Store |
-| Git | Última | https://git-scm.com |
+| **Node.js** | 18.x o superior | [nodejs.org](https://nodejs.org) |
+| **MongoDB Community** | 7.x | [mongodb.com/try/download/community](https://mongodb.com/try/download/community) |
+| **MongoDB Compass** | Última versión | [mongodb.com/products/tools/compass](https://mongodb.com/products/tools/compass) |
+| **Expo Go** | Descargar en celular (Android/iOS) | App Store o Google Play Store |
+| **Git CLI** | Última versión | [git-scm.com](https://git-scm.com) |
 
 ---
 
-## Variables de entorno:
+## ⚙️ Configuración del Entorno de Desarrollo
+
+### 1. Clonar el repositorio
+Abre una terminal en tu computadora y clona el proyecto en tu carpeta de preferencia:
+```bash
+git clone https://github.com/MonicaS17/busway-topicos.git
+cd busway-topicos
+```
+
+### 2. Instalar Dependencias (Excluidas en Git)
+Dado que los paquetes pesados de Node.js no se suben al control de versiones, debes instalarlos de forma independiente en ambas carpetas:
+
+* **Instalar backend:**
+  ```bash
+  cd be
+  npm install
+  ```
+* **Instalar aplicación móvil:**
+  ```bash
+  cd ../mobile
+  npm install --legacy-peer-deps
+  ```
+
+---
+
+## 📄 Archivos de Configuración (`.env` y Credenciales)
+
+Crea y configura los siguientes archivos locales de configuración en tu entorno:
 
 ### Backend (`be/.env`)
-
-Crea un archivo `.env` dentro de la carpeta `be` con esto:
-
+Crea un archivo `.env` en la carpeta `be/` con la siguiente estructura:
 ```env
 PORT=3000
 MONGODB_URI=mongodb://localhost:27017/busway
+STRIPE_SECRET_KEY=sk_test_...   # Llave secreta de tu Stripe Dashboard en modo de prueba
+STRIPE_WEBHOOK_SECRET=whsec_... # Opcional: para procesar firmas de webhooks de facturación local
 ```
 
-> ⚠️ El archivo `serviceAccount.json` de Firebase lo pide Mónica — no se sube a GitHub por seguridad.
+> [!IMPORTANT]
+> **Autenticación con Firebase:** Necesitas el archivo de credenciales de servicio `serviceAccount.json` de Firebase. Solicita este archivo a Mónica y colócalo dentro de la carpeta `be/` (este archivo está en el `.gitignore` por motivos de seguridad y no debe subirse a GitHub).
 
 ### Mobile (`mobile/.env`)
-
-Crea un archivo `.env` dentro de la carpeta `mobile` con esto:
-
+Crea un archivo `.env` en la carpeta `mobile/` con la siguiente estructura:
 ```env
 EXPO_PUBLIC_API_URL=http://TU_IP_LOCAL:3000
-EXPO_PUBLIC_GOOGLE_VISION_KEY=TU_CLAVE_AQUI
+EXPO_PUBLIC_GOOGLE_VISION_KEY=AIzaSy... # Clave de API de Google Vision para el OCR de Cédulas
 ```
 
-> ⚠️ La clave de Google Vision la tiene Mónica. La IP local cambia según tu red WiFi — mira cómo obtenerla abajo.
+> [!TIP]
+> **Cómo obtener tu IP local (Windows):**
+> 1. Abre PowerShell o CMD.
+> 2. Escribe `ipconfig` y presiona Enter.
+> 3. Copia tu dirección IPv4 (ej: `192.168.1.15`).
+> 4. Tu celular con **Expo Go** y tu computadora con el backend **deben estar conectados a la misma red WiFi** para que la app móvil pueda comunicarse con tu servidor local.
 
 ---
 
-## Archivos secretos (pídelos a Mónica)
+## 🚀 Ejecución del Proyecto
 
-Estos archivos **no están en GitHub** por seguridad. Pídelos por WhatsApp:
+### Paso 1: Iniciar el Servidor Backend
+Con tu base de datos MongoDB local corriendo de fondo (puedes verificarla abriendo MongoDB Compass en `mongodb://localhost:27017`):
 
-- `be/serviceAccount.json` → credenciales de Firebase Admin
-- La clave de Google Vision API → va en `mobile/.env`
----
+1. Posiciónate en la carpeta `be/`:
+   ```bash
+   cd be
+   ```
+2. Ejecuta el servidor:
+   ```bash
+   node server.js
+   ```
+   *Deberás ver el mensaje:*
+   `Conectado a MongoDB ✅`
+   `Servidor corriendo en puerto 3000 ✅`
 
-## Cómo ejecutar el proyecto
-
-### 1. Clonar el repositorio
-
-```bash
-git clone https://github.com/TU_USUARIO/busway.git
-cd busway
-```
-
-### 2. Configurar el Backend
-
-```bash
-cd be
-npm install
-```
-
-Crea el archivo `be/.env` con las variables de arriba y copia el `serviceAccount.json` dentro de `be/`.
-
-Luego ejecuta:
-
-```bash
-node server.js
-```
-
-Deberías ver:
-```
-Conectado a MongoDB ✅
-Servidor corriendo en puerto 3000 ✅
-```
-
-### 3. Configurar la App Móvil
-
-```bash
-cd ../mobile
-npm install --legacy-peer-deps
-```
-
-Crea el archivo `mobile/.env` con las variables de arriba.
-
-**Obtener tu IP local:**
-
-```bash
-# Windows
-ipconfig
-# Busca "IPv4 Address" en el adaptador Wi-Fi
-# Ejemplo: 192.168.1.5
-```
-
-Luego ejecuta:
-
-```bash
-npx expo start
-```
-
-Escanea el QR con **Expo Go** en tu celular.
-
-> Tu celular y tu computadora deben estar en la **misma red WiFi**.
+### Paso 2: Levantar el Entorno Móvil (Expo)
+1. Abre una nueva terminal en la carpeta `mobile/`:
+   ```bash
+   cd mobile
+   ```
+2. Inicia el bundler de Expo:
+   ```bash
+   npx expo start
+   ```
+3. Escanea el código QR que se imprime en tu terminal utilizando la aplicación **Expo Go** en tu celular para ver y probar la interfaz en tiempo real.
 
 ---
 
-## Cómo probar la app
+## 🗄️ Semillas e Información de Prueba
+La base de datos utilizará las siguientes colecciones:
+`usuarios`, `vehiculos`, `solicitudes`, `acuerdos`, `rutas`, `viajes`, `pagos`, `notificaciones`, `resenas` y `escuelas`.
 
-1. Abre **Expo Go** en tu celular
-2. Escanea el QR que aparece en la terminal
-3. Prueba el registro como conductor o padre
-4. Para el OCR de cédula necesitas buena iluminación
-
----
-
-## Base de datos
-
-La BD se llama `busway` y corre localmente en MongoDB.
-
-**Colecciones:**
-`usuarios` · `vehiculos` · `solicitudes` · `acuerdos` · `rutas` · `viajes` · `pagos` · `notificaciones` · `resenas` · `logs` · `escuelas`
-
-Para verla abre **MongoDB Compass** y conéctate a:
-```
-mongodb://localhost:27017
-```
-
----
-
-## Stack tecnológico
-
-| Capa | Tecnología |
-|---|---|
-| App móvil | React Native + Expo |
-| Backend | Node.js + Express |
-| Base de datos | MongoDB + Mongoose |
-| Autenticación | Firebase Authentication |
-| OCR cédula | Google Cloud Vision API |
-| Pagos | Stripe |
-| Almacenamiento | Cloudinary |
-| Notificaciones | Firebase Cloud Messaging |
-
----
+Para poblar y re-establecer tu base de datos de desarrollo con datos de prueba preestablecidos, revisa los scripts dentro de `be/seeds/` en tu entorno local.
