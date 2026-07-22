@@ -80,19 +80,19 @@ export default function DashboardScreen({ navigation, route }) {
       const response = await api.get('/api/acuerdos/mis-acuerdos', {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const activeAcuerdo = response.data?.acuerdo;
-      if (activeAcuerdo && activeAcuerdo.estado === 'activo') {
-        if (!activeAcuerdo.stripe_subscription_id) {
-          setAcuerdoPendientePago(activeAcuerdo);
-          setTienePagoEfectivo(false);
-        } else {
-          setAcuerdoPendientePago(null);
-          setTienePagoEfectivo(true);
-        }
-      } else {
-        setAcuerdoPendientePago(null);
-        setTienePagoEfectivo(false);
-      }
+      const acuerdos = response.data?.acuerdos || [];
+      // Permitir el seguimiento si al menos un hijo tiene pago efectivo.
+      // El bloqueo fino por hijo lo aplica useRuta dentro de ViajeScreen.
+      const algunoPagado = acuerdos.some(
+        (ac) => ac.estado === 'activo' && ac.stripe_subscription_id
+      );
+      // Mostrar banner con un acuerdo activo pendiente de pago (si existe)
+      const pendiente = acuerdos.find(
+        (ac) => ac.estado === 'activo' && !ac.stripe_subscription_id
+      );
+
+      setTienePagoEfectivo(algunoPagado);
+      setAcuerdoPendientePago(pendiente || null);
     } catch (error) {
       console.log('Error al cargar acuerdo del padre:', error.message);
       setTienePagoEfectivo(false);

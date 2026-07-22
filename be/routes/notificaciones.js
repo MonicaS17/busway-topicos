@@ -7,6 +7,7 @@ const Estudiante = require('../models/Estudiante');
 const Viaje = require('../models/Viaje');
 const Notificacion = require('../models/Notificacion');
 const Acuerdo = require('../models/Acuerdo');
+const Solicitud = require('../models/Solicitud');
 
 async function usuarioAutenticado(req, res) {
   const usuario = await Usuario.findOne({ firebase_uid: req.user.uid });
@@ -37,15 +38,33 @@ function formatearNotificacion(notificacion, usuarioId) {
   };
 }
 
-async function filtrarPadresPagados(padresIds) {
-  if (!padresIds || padresIds.length === 0) return [];
+// Devuelve el subconjunto de hijos cuyo acuerdo (vía su solicitud aceptada)
+// está activo y con pago efectivo. Mismo criterio hijo→solicitud→acuerdo que socketHandler.
+async function filtrarHijosPagados(hijosIds) {
+  if (!hijosIds || hijosIds.length === 0) return [];
+
+  const solicitudes = await Solicitud.find({
+    hijos_ids: { $in: hijosIds },
+    estado: 'aceptada'
+  }).select('_id hijos_ids');
+
+  if (solicitudes.length === 0) return [];
+
   const acuerdos = await Acuerdo.find({
-    padre_id: { $in: padresIds },
+    solicitud_id: { $in: solicitudes.map(s => s._id) },
     estado: 'activo',
     stripe_subscription_id: { $exists: true, $ne: null }
-  }).select('padre_id');
-  const pagados = new Set(acuerdos.map(a => String(a.padre_id)));
-  return padresIds.filter(id => pagados.has(String(id)));
+  }).select('solicitud_id');
+
+  const solicitudesPagadas = new Set(acuerdos.map(a => String(a.solicitud_id)));
+  const hijosPagados = new Set();
+  for (const solicitud of solicitudes) {
+    if (solicitudesPagadas.has(String(solicitud._id))) {
+      for (const hijo of solicitud.hijos_ids) hijosPagados.add(String(hijo));
+    }
+  }
+
+  return hijosIds.filter(id => hijosPagados.has(String(id)));
 }
 
 async function obtenerAsistentesDelDia(conductor, chosenRutaId) {
@@ -130,7 +149,10 @@ async function obtenerDestinatarios(conductor, audiencia, estudianteId, chosenRu
     };
   }
 
-  result.padresIds = await filtrarPadresPagados(result.padresIds);
+  // Filtrado por-hijo: solo hijos con acuerdo pagado; los padres se re-derivan de esos hijos.
+  result.hijosIds = await filtrarHijosPagados(result.hijosIds);
+  const estudiantesPagados = await Estudiante.find({ _id: { $in: result.hijosIds } }).select('padre_id');
+  result.padresIds = [...new Set(estudiantesPagados.map((estudiante) => String(estudiante.padre_id)))];
   return result;
 }
 
@@ -234,13 +256,13 @@ router.get('/padre', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Acceso exclusivo para padres' });
     }
 
-    // Verificar si el padre tiene un acuerdo activo con pago efectivo
-    const acuerdoActivo = await Acuerdo.findOne({
-      padre_id: padre._id,
-      estado: 'activo'
-    });
-    if (!acuerdoActivo || !acuerdoActivo.stripe_subscription_id) {
-      // Si no ha pagado, no puede ver las notificaciones (devolvemos historial vacío)
+    // Determinar los hijos del padre con acuerdo pagado (gating por-hijo)
+    const misHijos = await Estudiante.find({ padre_id: padre._id }).select('_id');
+    const hijosPagados = new Set(
+      (await filtrarHijosPagados(misHijos.map((hijo) => hijo._id))).map(String)
+    );
+    if (hijosPagados.size === 0) {
+      // Ningún hijo con pago efectivo: no puede ver notificaciones
       return res.json({ notificaciones: [], sinLeer: 0 });
     }
 
@@ -250,14 +272,17 @@ router.get('/padre', verifyToken, async (req, res) => {
       .populate('conductor_id', 'nombre apellido correo telefono datos_conductor')
       .populate('hijos_ids', 'nombre padre_id');
 
-    const datos = notificaciones.map((notificacion) => {
-      const base = formatearNotificacion(notificacion, padre._id);
-      const hijos = (notificacion.hijos_ids || [])
-        .filter((hijo) => String(hijo.padre_id) === String(padre._id))
-        .map((hijo) => ({ _id: hijo._id, nombre: hijo.nombre }));
+    const datos = notificaciones
+      .map((notificacion) => {
+        const base = formatearNotificacion(notificacion, padre._id);
+        const hijos = (notificacion.hijos_ids || [])
+          .filter((hijo) => String(hijo.padre_id) === String(padre._id) && hijosPagados.has(String(hijo._id)))
+          .map((hijo) => ({ _id: hijo._id, nombre: hijo.nombre }));
 
-      return { ...base, hijos_afectados: hijos };
-    });
+        return { ...base, hijos_afectados: hijos };
+      })
+      // Ocultar notificaciones que solo afectan a hijos sin pago efectivo
+      .filter((notificacion) => notificacion.hijos_afectados.length > 0);
 
     res.json({
       notificaciones: datos,
